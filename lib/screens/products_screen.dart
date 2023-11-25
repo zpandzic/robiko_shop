@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:robiko_shop/model/product.model.dart';
 
 import 'package:robiko_shop/Widgets/product_widget.dart';
+import 'package:robiko_shop/product_repository.dart';
 
 class ProductsScreen extends StatefulWidget {
   const ProductsScreen({super.key});
@@ -11,18 +12,7 @@ class ProductsScreen extends StatefulWidget {
 }
 
 class ProductsScreenState extends State<ProductsScreen> {
-  List<Product> products = List.generate(
-    10,
-    (index) => Product(
-      imageUrl: 'https://via.placeholder.com/150',
-      name: 'Naziv proizvoda $index',
-      code: '3211312',
-      catalogNumber: '123123123',
-      price: 99.99,
-      description: 'Opis proizvoda',
-      category: 'Kategorija',
-    ),
-  );
+  List<Product> products = ProductRepository().products;
 
   @override
   Widget build(BuildContext context) {
