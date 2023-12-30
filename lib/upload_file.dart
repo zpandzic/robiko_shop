@@ -1,11 +1,13 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:http/http.dart' as http;
 
 import 'package:csv/csv.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:robiko_shop/model/product.model.dart';
 import 'package:robiko_shop/model/visokaZaliheData.model.dart';
+import 'package:robiko_shop/model/listing.model.dart';
 import 'package:robiko_shop/product_repository.dart';
 
 const List<String> list = <String>[
@@ -120,8 +122,59 @@ class _UploadFileState extends State<UploadFile> {
             onPressed: selectedFile != null ? loadCsvFile : null,
             child: const Text('Učitaj'),
           ),
+          ElevatedButton(
+            onPressed: fetchUserListings,
+            child: const Text('Listings'),
+          ),
         ],
       ),
     );
   }
+}
+
+Future<List<Listing>> fetchUserListings() async {
+  // var url = Uri.parse('https://api.olx.ba/users/RobikoShop/listings');
+  List<Listing> listings = [];
+  int currentPage = 1;
+  bool hasMore = true;
+
+  while (hasMore) {
+    var url = Uri.parse(
+        'https://api.olx.ba/users/RobikoShop/listings?page=$currentPage');
+
+    try {
+      var response = await http.get(url, headers: {
+        'Content-Type': 'application/json',
+        'Authorization':
+            'Bearer 6992342|MZKjrtskpHnlW71Xc9pbtibtpuFrcIuNX7G3uLlh',
+      });
+
+      if (response.statusCode == 200) {
+        var data = json.decode(response.body);
+        if (data['data'] != null) {
+          for (var item in data['data']) {
+            Listing listing = Listing.fromJson(item);
+            listings.add(listing);
+            print(listing); // Print each listing object
+          }
+        }
+        // return listings;
+        if (data['meta']['last_page'] == currentPage) {
+          hasMore = false;
+        }
+        currentPage++;
+      } else {
+        // Handle the case where the server does not return a 200 OK response
+        print('Failed to load listings. Status code: ${response.statusCode}');
+        hasMore = false;
+        return [];
+      }
+    } catch (e) {
+      // Handle any errors that occur during the request
+      print('Error: $e');
+      hasMore = false;
+      return [];
+    }
+  }
+  return listings;
 }
