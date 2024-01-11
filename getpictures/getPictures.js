@@ -1,12 +1,8 @@
 // komanda za pokrecanje: node --experimental-fetch getPictures.js
-
 const fs = require("fs");
-const path = require("path");
+const PHPSESSID = "PHPSESSID=vga3fkmfahpf1fp95088rmr2ie";
 
-const PHPSESSID = "PHPSESSID=fo2uqkohkrito1tqkj5pc35nr0";
-
-const dohvatiSliku = (katBroj) => {
-  console.log("dohvatiSliku", katBroj);
+const pretraziSliku = (pattern) => {
   return fetch(
     "https://nuic.atit-solutions.eu/classes/tecdoc_ajax.php?load_articles=true",
     {
@@ -17,11 +13,19 @@ const dohvatiSliku = (katBroj) => {
       },
       body:
         "action=load_articles&pattern=" +
-        katBroj +
+        pattern +
         "&pattern_type=10&search_show_attributes=1&search_only_on_stock=0&search_show_price=1",
       method: "POST",
     }
-  ).then((response) => response.json());
+  )
+    .then((response) => response.json())
+    .then((data) => {
+      const slikaObjekta = Object.values(data?.resultData || {}).find(
+        (artikl) => artikl.picture
+      );
+      const slika = slikaObjekta ? slikaObjekta.picture : null;
+      return slika;
+    });
 };
 
 const ucitajPodatke = (filePath) => {
@@ -36,43 +40,82 @@ const ucitajPodatke = (filePath) => {
   });
 };
 
-// dohvatiSliku("VE80030");
+const dohvatiSlikuPoBarkoduIKatBroju = async (barkod, katBroj) => {
+  let slika = null;
 
-const listaKatBrojevaPath = path.join("listaKatBrojeva.json");
-const nuicFilePath = path.join("nuic.json");
-
-const obradiKatBrojeve = async (katBrojevi, artikliNuic) => {
-  for (const KatBroj of katBrojevi) {
-    if (!artikliNuic[KatBroj]) {
-      const data = await dohvatiSliku(KatBroj);
-      Object.keys(data.resultData).forEach((key) => {
-        if (key === "debug") return;
-        const artikl = data.resultData[key];
-        artikliNuic[artikl.no] = artikl;
-      });
-    }
+  if (barkod !== katBroj && barkod.length > 8) {
+    slika = await pretraziSliku(barkod);
   }
-  return artikliNuic;
+
+  if (!slika) {
+    slika = await pretraziSliku(katBroj);
+  }
+  return slika;
 };
 
-Promise.all([ucitajPodatke(listaKatBrojevaPath), ucitajPodatke(nuicFilePath)])
-  .then(([katBrojevi, artikliNuic]) =>
-    obradiKatBrojeve(katBrojevi, artikliNuic)
-  )
-  .then((artikliNuic) => {
-    fs.writeFile(
-      nuicFilePath,
-      JSON.stringify(artikliNuic, null, 2),
-      "utf8",
-      (err) => {
-        if (err) {
-          console.error("Error writing to the file:", err);
-        } else {
-          console.log("File updated successfully");
-        }
-      }
-    );
-  })
-  .catch((err) => {
-    console.error("Error:", err);
+const obradiCSV = (csvFilePath) => {
+  const data = fs.readFileSync(csvFilePath, "utf8");
+
+  const lines = data.split("\n");
+  lines.shift();
+  lines.shift();
+
+  const artikli = {};
+
+  lines.forEach((line) => {
+    const parts = line.split(";");
+    const katBroj = parts[6];
+    const barkod = parts[5];
+    const naziv = parts[7];
+
+    artikli[katBroj] = { katBroj, barkod, naziv, katBroj };
   });
+
+  return artikli;
+};
+
+const obrisiZagrade = (string) => {
+  return string.split("(")[0].trim();
+};
+
+const obradiArtikle = async () => {
+  const artikliCSV = obradiCSV("assets/csv/ak2-finalno.csv");
+  const spremljeneSlike = await ucitajPodatke("getpictures/rezultatSlika.json");
+  let index = 0;
+  for (const key of Object.keys(artikliCSV)) {
+    const artikl = artikliCSV[key];
+    index++;
+    console.log(
+      index + "/" + Object.keys(artikliCSV).length,
+      "katBroj:" + artikl.katBroj,
+      spremljeneSlike[artikl.katBroj] && !artikl.katBroj.includes("(") ? "SKIPPED" : ""
+    );
+
+    if (spremljeneSlike[artikl.katBroj] && !artikl.katBroj.includes("(")) {
+      continue;
+    }
+    try {
+      const slika = await dohvatiSlikuPoBarkoduIKatBroju(
+        artikl.barkod,
+        obrisiZagrade(artikl.katBroj)
+      );
+      spremljeneSlike[artikl.katBroj] = {
+        slika: slika ? slika : null,
+        naziv: artikl.naziv,
+        barkod: artikl.barkod,
+        katBroj: artikl.katBroj,
+      };
+
+      fs.writeFile(
+        "getpictures/rezultatSlika.json",
+        JSON.stringify(spremljeneSlike, null, 2),
+        "utf8",
+        (err) => {}
+      );
+    } catch (err) {
+      console.log(err);
+    }
+  }
+};
+
+obradiArtikle().catch(console.error);
