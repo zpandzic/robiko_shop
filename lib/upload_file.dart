@@ -1,6 +1,10 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
+import 'package:path/path.dart' as path;
+import 'package:flutter/services.dart' show rootBundle;
+import 'package:path_provider/path_provider.dart';
+import 'dart:typed_data';
 
 import 'package:csv/csv.dart';
 import 'package:file_picker/file_picker.dart';
@@ -126,6 +130,10 @@ class _UploadFileState extends State<UploadFile> {
             onPressed: fetchUserListings,
             child: const Text('Listings'),
           ),
+          ElevatedButton(
+            onPressed: uploadListing,
+            child: const Text('Objavi'),
+          ),
         ],
       ),
     );
@@ -177,4 +185,114 @@ Future<List<Listing>> fetchUserListings() async {
     }
   }
   return listings;
+}
+
+Future<http.Response> uploadListing() async {
+  var url = Uri.parse('https://api.olx.ba/listings');
+
+  try {
+    Map<String, dynamic> listingData = {
+      'title': 'Treci test',
+      'listing_type': 'sell',
+      'description': 'Test description',
+      'price': 100,
+      'category_id': 947,
+      'attributes': [
+        {'id': 7192, 'value': 'Prodaja'}
+      ],
+      'available': true,
+      'state': 'new',
+      'country_id': 49,
+      'city_id': 16,
+    };
+
+    var response = await http.post(
+      url,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization':
+            'Bearer 6992342|MZKjrtskpHnlW71Xc9pbtibtpuFrcIuNX7G3uLlh',
+      },
+      body: json.encode(listingData),
+    );
+    print('Response status: ${response.statusCode}');
+    print('Response body: ${response.body}');
+
+    if (response.statusCode == 201) {
+      var data = json.decode(response.body);
+      String listingId = data['id'].toString();
+      await addImage(listingId);
+      await publishListing(listingId);
+    }
+
+    return response;
+  } catch (e) {
+    // Print error if the request fails
+    print('Error occurred: $e');
+    rethrow; // Rethrowing the exception to handle it at the calling place
+  }
+}
+
+Future<File> getImageFileFromAssets(String path) async {
+  final byteData = await rootBundle.load('assets/images/$path');
+
+  final file = File('${(await getTemporaryDirectory()).path}/$path');
+  await file.writeAsBytes(byteData.buffer
+      .asUint8List(byteData.offsetInBytes, byteData.lengthInBytes));
+
+  return file;
+}
+
+Future<http.Response> addImage(String id) async {
+  var url = Uri.parse('https://api.olx.ba/listings/${id}/image-upload');
+  var imageName = 'EOF285(W7032).jpg';
+  File imageFile = await getImageFileFromAssets(imageName);
+
+  var request = http.MultipartRequest('POST', url)
+    ..headers.addAll({
+      'Authorization':
+          'Bearer 6992342|MZKjrtskpHnlW71Xc9pbtibtpuFrcIuNX7G3uLlh',
+    })
+    ..files.add(await http.MultipartFile.fromPath(
+      'images[]', // The field name in the form
+      imageFile.path,
+      filename:
+          path.basename(imageFile.path), // Extracting the basename of the file
+    ));
+
+  try {
+    var streamedResponse = await request.send();
+    var response = await http.Response.fromStream(streamedResponse);
+
+    print('Response status: ${response.statusCode}');
+    print('Response body: ${response.body}');
+
+    return response;
+  } catch (e) {
+    print('Error occurred: $e');
+    rethrow; // Rethrow the exception to handle it in the calling function
+  }
+}
+
+Future<http.Response> publishListing(String listingId) async {
+  String token = '6992342|MZKjrtskpHnlW71Xc9pbtibtpuFrcIuNX7G3uLlh';
+  var url = Uri.parse('https://api.olx.ba/listings/$listingId/publish');
+
+  try {
+    var response = await http.post(
+      url,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+    );
+
+    print('Response status: ${response.statusCode}');
+    print('Response body: ${response.body}');
+
+    return response;
+  } catch (e) {
+    print('Error occurred: $e');
+    rethrow; // Rethrowing the exception to handle it at the calling place
+  }
 }
