@@ -1,4 +1,5 @@
 import 'package:robiko_shop/model/visokaZaliheData.model.dart';
+import 'package:robiko_shop/screens/products_screen.dart';
 
 class Product {
   final String imageUrl;
@@ -6,7 +7,9 @@ class Product {
   final String code;
   final String catalogNumber;
   final String description;
-  final String category;
+  late List<AttributeValue>? attributesList;
+  String? category;
+  int? categoryId;
   final double price;
 
   Product({
@@ -16,7 +19,9 @@ class Product {
     required this.catalogNumber,
     required this.description,
     required this.category,
+    required this.categoryId,
     required this.price,
+    required this.attributesList,
   });
 
   // Static method to map VisokaZalihe to Product
@@ -29,9 +34,25 @@ class Product {
         code: visokaZalihe.sifraRobe,
         catalogNumber: visokaZalihe.katBroj,
         description: 'Opis proizvoda',
-        category: 'Kategorija',
+        category: null,
+        categoryId: null,
+        attributesList: null,
         price: visokaZalihe.mpc,
       );
     }).toList();
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'imageUrl': imageUrl,
+      'name': name,
+      'code': code,
+      'catalogNumber': catalogNumber,
+      'description': description,
+      'category': category,
+      'categoryId': categoryId,
+      'price': price,
+      'attributesList': attributesList?.map((e) => e.toJson()).toList(),
+    };
   }
 }
