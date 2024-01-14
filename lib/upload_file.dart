@@ -4,7 +4,6 @@ import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as path;
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:path_provider/path_provider.dart';
-import 'dart:typed_data';
 
 import 'package:csv/csv.dart';
 import 'package:file_picker/file_picker.dart';
@@ -162,9 +161,9 @@ class _UploadFileState extends State<UploadFile> {
             onPressed: selectedFile != null ? loadCsvFile : null,
             child: const Text('Učitaj'),
           ),
-          ElevatedButton(
+          const ElevatedButton(
             onPressed: fetchUserListings,
-            child: const Text('Listings'),
+            child: Text('Listings'),
           ),
           // ElevatedButton(
           //   onPressed: uploadListing,
@@ -234,7 +233,7 @@ void uploadListings(List<Product> products) async {
 }
 
 void printFormattedJson(Map<String, dynamic> jsonData) {
-  JsonEncoder encoder = JsonEncoder.withIndent('  '); // Two-space indentation
+  JsonEncoder encoder = const JsonEncoder.withIndent('  '); // Two-space indentation
   String prettyPrint = encoder.convert(jsonData);
   print(prettyPrint);
 }
@@ -299,7 +298,7 @@ Future<File?> getImageFileFromAssets(String imageName) async {
 }
 
 Future<void> addImage(String id, String catalogNumber) async {
-  var url = Uri.parse('https://api.olx.ba/listings/${id}/image-upload');
+  var url = Uri.parse('https://api.olx.ba/listings/$id/image-upload');
 
   String imageName = catalogNumber.replaceAll("/", "\$");
 

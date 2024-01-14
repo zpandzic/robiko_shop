@@ -155,24 +155,24 @@ class ProductsScreenState extends State<ProductsScreen>
           child: Wrap(
             children: <Widget>[
               ListTile(
-                leading: Icon(Icons.delete),
-                title: Text('Obriši odabrane artikle'),
+                leading: const Icon(Icons.delete),
+                title: const Text('Obriši odabrane artikle'),
                 onTap: () {
                   Navigator.pop(context);
                   _deleteSelectedProducts();
                 },
               ),
               ListTile(
-                leading: Icon(Icons.category),
-                title: Text('Postavi kategoriju za odabrane artikle'),
+                leading: const Icon(Icons.category),
+                title: const Text('Postavi kategoriju za odabrane artikle'),
                 onTap: () {
                   Navigator.pop(context);
                   _setCategoryForSelectedProducts();
                 },
               ),
               ListTile(
-                leading: Icon(Icons.warning),
-                title: Text('Objavi'),
+                leading: const Icon(Icons.warning),
+                title: const Text('Objavi'),
                 onTap: () {
                   Navigator.pop(context);
                   objavi();
@@ -228,7 +228,7 @@ class ProductsScreenState extends State<ProductsScreen>
           builder: (BuildContext context, StateSetter setStateDialog) {
             return AlertDialog(
               title: const Text('Uredi Proizvod'),
-              content: Container(
+              content: SizedBox(
                 height: 300.0,
                 width: 300.0,
                 child: Column(
@@ -422,7 +422,7 @@ class ProductsScreenState extends State<ProductsScreen>
   Widget _buildDropdown(
       CategoryAttribute attribute, StateSetter setStateDialog) {
     return DropdownButtonFormField<String>(
-      decoration: InputDecoration(
+      decoration: const InputDecoration(
         border: OutlineInputBorder(),
         contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 15),
       ),
@@ -496,7 +496,7 @@ class ProductsScreenState extends State<ProductsScreen>
         onPressed: () {
           _showActionSheet();
         },
-        child: Icon(Icons.settings), // Use an appropriate icon
+        child: const Icon(Icons.settings), // Use an appropriate icon
       ),
       body: Column(
         children: <Widget>[
@@ -528,7 +528,7 @@ class ProductsScreenState extends State<ProductsScreen>
                               spreadRadius: 2, // Spread radius
                               blurRadius: 4, // Blur radius
                               offset:
-                                  Offset(0, 2), // Changes position of shadow
+                                  const Offset(0, 2), // Changes position of shadow
                             ),
                           ],
                         ),
@@ -583,9 +583,9 @@ class ProductsScreenState extends State<ProductsScreen>
                     child: TextButton(
                       child: const Text('sta ima'),
                       onPressed: () {
-                        products.forEach((product) {
+                        for (var product in products) {
                           print(product.toJson());
-                        });
+                        }
                       },
                     ),
                   ),

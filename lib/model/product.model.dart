@@ -1,4 +1,3 @@
-import 'package:robiko_shop/model/listing.model.dart';
 import 'package:robiko_shop/model/visokaZaliheData.model.dart';
 import 'package:robiko_shop/screens/products_screen.dart';
 
