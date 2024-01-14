@@ -34,7 +34,7 @@ class _UploadFileState extends State<UploadFile> {
   void pickCsvFile() async {
     if (testing) {
       const filePath =
-          '/data/user/0/com.example.robiko_shop/cache/file_picker/test_excel.csv';
+          '/data/user/0/com.example.robiko_shop/cache/file_picker/ak2-finalno.csv';
       setState(() {
         selectedFile = File(filePath);
       });
@@ -57,14 +57,38 @@ class _UploadFileState extends State<UploadFile> {
     }
   }
 
+  // void loadCsvFile() async {
+  //   if (selectedFile != null) {
+  //     // Your logic to read and process the CSV file goes here
+  //     final input = selectedFile!.openRead();
+  //     List<List> rows = await input
+  //         .transform(utf8.decoder)
+  //         .transform(const CsvToListConverter(fieldDelimiter: ';'))
+  //         .toList();
+
+  //     mapRows(rows);
+  //   } else {
+  //     print('Please select a file first.');
+  //   }
+  // }
+
   void loadCsvFile() async {
     if (selectedFile != null) {
-      // Your logic to read and process the CSV file goes here
       final input = selectedFile!.openRead();
-      List<List> rows = await input
+      int rowCount = 0;
+      const int maxRowsForTesting = 3; // Number of rows to read for testing
+
+      List<List<dynamic>> rows = [];
+
+      Stream<List> csvStream = input
           .transform(utf8.decoder)
-          .transform(const CsvToListConverter(fieldDelimiter: ';'))
-          .toList();
+          .transform(const CsvToListConverter(fieldDelimiter: ';'));
+
+      await for (List<dynamic> row in csvStream) {
+        rows.add(row);
+        rowCount++;
+        if (rowCount >= maxRowsForTesting) break;
+      }
 
       mapRows(rows);
     } else {
@@ -73,16 +97,28 @@ class _UploadFileState extends State<UploadFile> {
   }
 
   void mapRows(List<List> rows) {
+    if (rows.isEmpty) return;
+
+    // Assuming header row is the first row of the CSV
+    List<dynamic> headerRow = rows[1];
+
+    // Create a map for column indexes
+    Map<String, int> columnIndexes = {};
+    for (int i = 0; i < headerRow.length; i++) {
+      columnIndexes[headerRow[i].toString()] = i;
+    }
+
     switch (dropdownValue) {
       case 'VisokaZalihe':
-        // Skip the first two rows (header rows) and map each row to an Ak2Data object
+        // Skip the first row (header row) and map each row to a VisokaZalihe object
         List<VisokaZalihe> dataObjects = rows.skip(2).map((row) {
-          return VisokaZalihe.fromCsvRow(row);
+          return VisokaZalihe.fromCsvRow(row, columnIndexes);
         }).toList();
 
         ProductRepository().products =
             Product.fromVisokaZaliheList(dataObjects);
 
+        ProductRepository().printFormattedJson();
         break;
 
       case 'NUIĆ':
@@ -130,10 +166,10 @@ class _UploadFileState extends State<UploadFile> {
             onPressed: fetchUserListings,
             child: const Text('Listings'),
           ),
-          ElevatedButton(
-            onPressed: uploadListing,
-            child: const Text('Objavi'),
-          ),
+          // ElevatedButton(
+          //   onPressed: uploadListing,
+          //   child: const Text('Objavi'),
+          // ),
         ],
       ),
     );
@@ -187,25 +223,29 @@ Future<List<Listing>> fetchUserListings() async {
   return listings;
 }
 
-Future<http.Response> uploadListing() async {
+void uploadListings(List<Product> products) async {
+  for (var product in products) {
+    // printFormattedJson(product.toListing());
+
+    // await addImage('58087762', '1457431703(PU1021X)');
+
+    await uploadListing(product.toListing(), product.catalogNumber);
+  }
+}
+
+void printFormattedJson(Map<String, dynamic> jsonData) {
+  JsonEncoder encoder = JsonEncoder.withIndent('  '); // Two-space indentation
+  String prettyPrint = encoder.convert(jsonData);
+  print(prettyPrint);
+}
+
+Future<http.Response> uploadListing(
+    Map<String, dynamic> listingData, String catalogNumber) async {
+  printFormattedJson(listingData);
+
   var url = Uri.parse('https://api.olx.ba/listings');
 
   try {
-    Map<String, dynamic> listingData = {
-      'title': 'Treci test',
-      'listing_type': 'sell',
-      'description': 'Test description',
-      'price': 100,
-      'category_id': 947,
-      'attributes': [
-        {'id': 7192, 'value': 'Prodaja'}
-      ],
-      'available': true,
-      'state': 'new',
-      'country_id': 49,
-      'city_id': 16,
-    };
-
     var response = await http.post(
       url,
       headers: {
@@ -215,13 +255,13 @@ Future<http.Response> uploadListing() async {
       },
       body: json.encode(listingData),
     );
-    print('Response status: ${response.statusCode}');
-    print('Response body: ${response.body}');
+    print('[uploadListing] Response status: ${response.statusCode}');
+    print('[uploadListing] Response body: ${response.body}');
 
     if (response.statusCode == 201) {
       var data = json.decode(response.body);
       String listingId = data['id'].toString();
-      await addImage(listingId);
+      await addImage(listingId, catalogNumber);
       await publishListing(listingId);
     }
 
@@ -233,20 +273,42 @@ Future<http.Response> uploadListing() async {
   }
 }
 
-Future<File> getImageFileFromAssets(String path) async {
-  final byteData = await rootBundle.load('assets/images/$path');
-
-  final file = File('${(await getTemporaryDirectory()).path}/$path');
-  await file.writeAsBytes(byteData.buffer
-      .asUint8List(byteData.offsetInBytes, byteData.lengthInBytes));
-
-  return file;
+Future<File?> getImageFileFromAssets(String imageName) async {
+  List<String> extensions = [
+    '.jpg',
+    '.png',
+    // '.jpeg'
+  ]; // List of possible extensions
+  for (var ext in extensions) {
+    try {
+      final filePath = 'assets/slike/$imageName$ext';
+      final byteData = await rootBundle.load(filePath);
+      final file =
+          File('${(await getTemporaryDirectory()).path}/$imageName$ext');
+      await file.writeAsBytes(
+        byteData.buffer
+            .asUint8List(byteData.offsetInBytes, byteData.lengthInBytes),
+      );
+      return file; // File found and written
+    } catch (e) {
+      // File with this extension not found, try next
+    }
+  }
+  // No file found with any of the extensions
+  return null;
 }
 
-Future<http.Response> addImage(String id) async {
+Future<void> addImage(String id, String catalogNumber) async {
   var url = Uri.parse('https://api.olx.ba/listings/${id}/image-upload');
-  var imageName = 'EOF285(W7032).jpg';
-  File imageFile = await getImageFileFromAssets(imageName);
+
+  String imageName = catalogNumber.replaceAll("/", "\$");
+
+  File? imageFile = await getImageFileFromAssets(imageName);
+
+  print(imageFile);
+  if (imageFile == null) {
+    return;
+  }
 
   var request = http.MultipartRequest('POST', url)
     ..headers.addAll({
@@ -267,7 +329,7 @@ Future<http.Response> addImage(String id) async {
     print('Response status: ${response.statusCode}');
     print('Response body: ${response.body}');
 
-    return response;
+    return;
   } catch (e) {
     print('Error occurred: $e');
     rethrow; // Rethrow the exception to handle it in the calling function

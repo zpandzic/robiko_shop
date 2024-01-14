@@ -6,6 +6,8 @@ import 'package:robiko_shop/product_repository.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 
+import 'package:robiko_shop/upload_file.dart';
+
 class ProductsScreen extends StatefulWidget {
   const ProductsScreen({super.key});
 
@@ -125,6 +127,19 @@ class ProductsScreenState extends State<ProductsScreen>
     );
   }
 
+  void objavi() {
+    List<Product> productsJson = products
+        .where((element) => selectedProducts[element.catalogNumber] == true)
+        .toList();
+    // .map((product) => product.toJson())
+    // .toList();
+    String jsonStr = jsonEncode(productsJson);
+
+    uploadListings(productsJson);
+
+    print(jsonStr);
+  }
+
   @override
   void dispose() {
     _tabController.dispose();
@@ -153,6 +168,14 @@ class ProductsScreenState extends State<ProductsScreen>
                 onTap: () {
                   Navigator.pop(context);
                   _setCategoryForSelectedProducts();
+                },
+              ),
+              ListTile(
+                leading: Icon(Icons.warning),
+                title: Text('Objavi'),
+                onTap: () {
+                  Navigator.pop(context);
+                  objavi();
                 },
               ),
             ],
