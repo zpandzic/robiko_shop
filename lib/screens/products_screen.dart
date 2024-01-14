@@ -1,12 +1,16 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show rootBundle;
+import 'package:http/http.dart' as http;
+import 'package:path/path.dart' as path;
+import 'package:path_provider/path_provider.dart';
 import 'package:robiko_shop/Widgets/product_widget.dart';
+import 'package:robiko_shop/dialogs/upload_progress_dialog.dart';
 import 'package:robiko_shop/model/category_attribute.dart';
 import 'package:robiko_shop/model/product.model.dart';
 import 'package:robiko_shop/product_repository.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
-
-import 'package:robiko_shop/upload_file.dart';
 
 class ProductsScreen extends StatefulWidget {
   const ProductsScreen({super.key});
@@ -127,7 +131,7 @@ class ProductsScreenState extends State<ProductsScreen>
     );
   }
 
-  void objavi() {
+  void objavi(BuildContext context) {
     List<Product> productsJson = products
         .where((element) => selectedProducts[element.catalogNumber] == true)
         .toList();
@@ -135,9 +139,190 @@ class ProductsScreenState extends State<ProductsScreen>
     // .toList();
     String jsonStr = jsonEncode(productsJson);
 
-    uploadListings(productsJson);
+    uploadListings(productsJson, context);
 
     print(jsonStr);
+  }
+
+  void printFormattedJson(Map<String, dynamic> jsonData) {
+    JsonEncoder encoder =
+        const JsonEncoder.withIndent('  '); // Two-space indentation
+    String prettyPrint = encoder.convert(jsonData);
+    print(prettyPrint);
+  }
+
+  void uploadListings(List<Product> products, BuildContext context) async {
+    void Function(int, bool)? updateProgress;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return UploadProgressDialog(
+          totalProducts: products.length,
+          onUploadProgress: (update) {
+            updateProgress = update;
+          },
+        );
+      },
+    );
+    int currentIndex = 0;
+    for (var product in products) {
+      currentIndex++;
+      try {
+        await uploadListing(product.toListing(), product.catalogNumber);
+
+        await Future.delayed(Duration(milliseconds: 100));
+
+        if (updateProgress != null) {
+          updateProgress!(currentIndex, true);
+        }
+      } catch (e) {
+        if (updateProgress != null) {
+          updateProgress!(currentIndex, true);
+        }
+      }
+    }
+
+// Close the dialog when all uploads are done
+    Navigator.of(context).pop();
+  }
+
+  //   // int currentIndex = 0;
+  //   for (var product in List.generate(10, (index) => index)) {
+  //     // currentIndex++;
+  //     try {
+  //       // await uploadListing(product.toListing(), product.catalogNumber);
+  //       await Future.delayed(Duration(milliseconds: 100));
+
+  //       // Update progress on success
+  //     } catch (e) {
+  //       // Update progress on failure
+  //     }
+  //   }
+
+  //   // Close the dialog when all uploads are done
+  //   Navigator.of(context).pop();
+  // }
+
+  Future<http.Response> uploadListing(
+      Map<String, dynamic> listingData, String catalogNumber) async {
+    printFormattedJson(listingData);
+
+    var url = Uri.parse('https://api.olx.ba/listings');
+
+    try {
+      var response = await http.post(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization':
+              'Bearer 6992342|MZKjrtskpHnlW71Xc9pbtibtpuFrcIuNX7G3uLlh',
+        },
+        body: json.encode(listingData),
+      );
+      print('[uploadListing] Response status: ${response.statusCode}');
+      print('[uploadListing] Response body: ${response.body}');
+
+      if (response.statusCode == 201) {
+        var data = json.decode(response.body);
+        String listingId = data['id'].toString();
+        await addImage(listingId, catalogNumber);
+        await publishListing(listingId);
+      }
+
+      return response;
+    } catch (e) {
+      // Print error if the request fails
+      print('Error occurred: $e');
+      rethrow; // Rethrowing the exception to handle it at the calling place
+    }
+  }
+
+  Future<File?> getImageFileFromAssets(String imageName) async {
+    List<String> extensions = [
+      '.jpg',
+      '.png',
+      // '.jpeg'
+    ]; // List of possible extensions
+    for (var ext in extensions) {
+      try {
+        final filePath = 'assets/slike/$imageName$ext';
+        final byteData = await rootBundle.load(filePath);
+        final file =
+            File('${(await getTemporaryDirectory()).path}/$imageName$ext');
+        await file.writeAsBytes(
+          byteData.buffer
+              .asUint8List(byteData.offsetInBytes, byteData.lengthInBytes),
+        );
+        return file; // File found and written
+      } catch (e) {
+        // File with this extension not found, try next
+      }
+    }
+    // No file found with any of the extensions
+    return null;
+  }
+
+  Future<void> addImage(String id, String catalogNumber) async {
+    var url = Uri.parse('https://api.olx.ba/listings/$id/image-upload');
+
+    String imageName = catalogNumber.replaceAll("/", "\$");
+
+    File? imageFile = await getImageFileFromAssets(imageName);
+
+    print(imageFile);
+    if (imageFile == null) {
+      return;
+    }
+
+    var request = http.MultipartRequest('POST', url)
+      ..headers.addAll({
+        'Authorization':
+            'Bearer 6992342|MZKjrtskpHnlW71Xc9pbtibtpuFrcIuNX7G3uLlh',
+      })
+      ..files.add(await http.MultipartFile.fromPath(
+        'images[]', // The field name in the form
+        imageFile.path,
+        filename: path
+            .basename(imageFile.path), // Extracting the basename of the file
+      ));
+
+    try {
+      var streamedResponse = await request.send();
+      var response = await http.Response.fromStream(streamedResponse);
+
+      print('Response status: ${response.statusCode}');
+      print('Response body: ${response.body}');
+
+      return;
+    } catch (e) {
+      print('Error occurred: $e');
+      rethrow; // Rethrow the exception to handle it in the calling function
+    }
+  }
+
+  Future<http.Response> publishListing(String listingId) async {
+    String token = '6992342|MZKjrtskpHnlW71Xc9pbtibtpuFrcIuNX7G3uLlh';
+    var url = Uri.parse('https://api.olx.ba/listings/$listingId/publish');
+
+    try {
+      var response = await http.post(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      print('Response status: ${response.statusCode}');
+      print('Response body: ${response.body}');
+
+      return response;
+    } catch (e) {
+      print('Error occurred: $e');
+      rethrow; // Rethrowing the exception to handle it at the calling place
+    }
   }
 
   @override
@@ -175,7 +360,7 @@ class ProductsScreenState extends State<ProductsScreen>
                 title: const Text('Objavi'),
                 onTap: () {
                   Navigator.pop(context);
-                  objavi();
+                  objavi(context);
                 },
               ),
             ],
@@ -411,6 +596,7 @@ class ProductsScreenState extends State<ProductsScreen>
       case 'select':
         return _buildDropdown(attribute, setStateDialog);
       case 'text-range':
+      case 'text':
         return _buildTextField(attribute, setStateDialog);
       case 'checkbox':
         return _buildCheckbox(attribute, setStateDialog);
@@ -527,8 +713,8 @@ class ProductsScreenState extends State<ProductsScreen>
                                   0.5), // Shadow color with opacity
                               spreadRadius: 2, // Spread radius
                               blurRadius: 4, // Blur radius
-                              offset:
-                                  const Offset(0, 2), // Changes position of shadow
+                              offset: const Offset(
+                                  0, 2), // Changes position of shadow
                             ),
                           ],
                         ),

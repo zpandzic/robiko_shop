@@ -1,16 +1,13 @@
 import 'dart:convert';
 import 'dart:io';
-import 'package:http/http.dart' as http;
-import 'package:path/path.dart' as path;
-import 'package:flutter/services.dart' show rootBundle;
-import 'package:path_provider/path_provider.dart';
 
 import 'package:csv/csv.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:robiko_shop/model/listing.model.dart';
 import 'package:robiko_shop/model/product.model.dart';
 import 'package:robiko_shop/model/visokaZaliheData.model.dart';
-import 'package:robiko_shop/model/listing.model.dart';
 import 'package:robiko_shop/product_repository.dart';
 
 const List<String> list = <String>[
@@ -220,140 +217,4 @@ Future<List<Listing>> fetchUserListings() async {
     }
   }
   return listings;
-}
-
-void uploadListings(List<Product> products) async {
-  for (var product in products) {
-    // printFormattedJson(product.toListing());
-
-    // await addImage('58087762', '1457431703(PU1021X)');
-
-    await uploadListing(product.toListing(), product.catalogNumber);
-  }
-}
-
-void printFormattedJson(Map<String, dynamic> jsonData) {
-  JsonEncoder encoder = const JsonEncoder.withIndent('  '); // Two-space indentation
-  String prettyPrint = encoder.convert(jsonData);
-  print(prettyPrint);
-}
-
-Future<http.Response> uploadListing(
-    Map<String, dynamic> listingData, String catalogNumber) async {
-  printFormattedJson(listingData);
-
-  var url = Uri.parse('https://api.olx.ba/listings');
-
-  try {
-    var response = await http.post(
-      url,
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization':
-            'Bearer 6992342|MZKjrtskpHnlW71Xc9pbtibtpuFrcIuNX7G3uLlh',
-      },
-      body: json.encode(listingData),
-    );
-    print('[uploadListing] Response status: ${response.statusCode}');
-    print('[uploadListing] Response body: ${response.body}');
-
-    if (response.statusCode == 201) {
-      var data = json.decode(response.body);
-      String listingId = data['id'].toString();
-      await addImage(listingId, catalogNumber);
-      await publishListing(listingId);
-    }
-
-    return response;
-  } catch (e) {
-    // Print error if the request fails
-    print('Error occurred: $e');
-    rethrow; // Rethrowing the exception to handle it at the calling place
-  }
-}
-
-Future<File?> getImageFileFromAssets(String imageName) async {
-  List<String> extensions = [
-    '.jpg',
-    '.png',
-    // '.jpeg'
-  ]; // List of possible extensions
-  for (var ext in extensions) {
-    try {
-      final filePath = 'assets/slike/$imageName$ext';
-      final byteData = await rootBundle.load(filePath);
-      final file =
-          File('${(await getTemporaryDirectory()).path}/$imageName$ext');
-      await file.writeAsBytes(
-        byteData.buffer
-            .asUint8List(byteData.offsetInBytes, byteData.lengthInBytes),
-      );
-      return file; // File found and written
-    } catch (e) {
-      // File with this extension not found, try next
-    }
-  }
-  // No file found with any of the extensions
-  return null;
-}
-
-Future<void> addImage(String id, String catalogNumber) async {
-  var url = Uri.parse('https://api.olx.ba/listings/$id/image-upload');
-
-  String imageName = catalogNumber.replaceAll("/", "\$");
-
-  File? imageFile = await getImageFileFromAssets(imageName);
-
-  print(imageFile);
-  if (imageFile == null) {
-    return;
-  }
-
-  var request = http.MultipartRequest('POST', url)
-    ..headers.addAll({
-      'Authorization':
-          'Bearer 6992342|MZKjrtskpHnlW71Xc9pbtibtpuFrcIuNX7G3uLlh',
-    })
-    ..files.add(await http.MultipartFile.fromPath(
-      'images[]', // The field name in the form
-      imageFile.path,
-      filename:
-          path.basename(imageFile.path), // Extracting the basename of the file
-    ));
-
-  try {
-    var streamedResponse = await request.send();
-    var response = await http.Response.fromStream(streamedResponse);
-
-    print('Response status: ${response.statusCode}');
-    print('Response body: ${response.body}');
-
-    return;
-  } catch (e) {
-    print('Error occurred: $e');
-    rethrow; // Rethrow the exception to handle it in the calling function
-  }
-}
-
-Future<http.Response> publishListing(String listingId) async {
-  String token = '6992342|MZKjrtskpHnlW71Xc9pbtibtpuFrcIuNX7G3uLlh';
-  var url = Uri.parse('https://api.olx.ba/listings/$listingId/publish');
-
-  try {
-    var response = await http.post(
-      url,
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer $token',
-      },
-    );
-
-    print('Response status: ${response.statusCode}');
-    print('Response body: ${response.body}');
-
-    return response;
-  } catch (e) {
-    print('Error occurred: $e');
-    rethrow; // Rethrowing the exception to handle it at the calling place
-  }
 }
