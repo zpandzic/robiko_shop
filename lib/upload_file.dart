@@ -3,11 +3,13 @@ import 'dart:io';
 
 import 'package:csv/csv.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:robiko_shop/model/listing.model.dart';
 import 'package:robiko_shop/model/product.model.dart';
 import 'package:robiko_shop/model/visokaZaliheData.model.dart';
+import 'package:robiko_shop/network_service.dart';
 import 'package:robiko_shop/product_repository.dart';
 
 const List<String> list = <String>[
@@ -25,7 +27,45 @@ class UploadFile extends StatefulWidget {
 class _UploadFileState extends State<UploadFile> {
   String? dropdownValue = list[0];
   File? selectedFile;
-  bool testing = true;
+  bool testing = false;
+  bool _isLoading = false;
+
+  Future<void> _loadData() async {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return Dialog(
+          child: Container(
+            padding: EdgeInsets.all(20),
+            child: const Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircularProgressIndicator(),
+                SizedBox(width: 20),
+                Text("Učitavanje ..."),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+
+    try {
+      await fetchUserListings().then((value) {
+        if (value.isNotEmpty) {
+          ProductRepository().setActiveListings(value);
+        }
+      });
+    } catch (error) {
+      print('Error: $error');
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+      Navigator.of(context).pop();
+    }
+  }
 
   void pickCsvFile() async {
     if (testing) {
@@ -44,12 +84,16 @@ class _UploadFileState extends State<UploadFile> {
 
     if (result != null) {
       final filePath = result.files.single.path!;
-      print(filePath);
+      if (kDebugMode) {
+        print(filePath);
+      }
       setState(() {
         selectedFile = File(filePath);
       });
     } else {
-      print('No file selected');
+      if (kDebugMode) {
+        print('No file selected');
+      }
     }
   }
 
@@ -72,7 +116,7 @@ class _UploadFileState extends State<UploadFile> {
     if (selectedFile != null) {
       final input = selectedFile!.openRead();
       int rowCount = 0;
-      const int maxRowsForTesting = 3; // Number of rows to read for testing
+      const int maxRowsForTesting = 2 + 5; // Number of rows to read for testing
 
       List<List<dynamic>> rows = [];
 
@@ -88,7 +132,9 @@ class _UploadFileState extends State<UploadFile> {
 
       mapRows(rows);
     } else {
-      print('Please select a file first.');
+      if (kDebugMode) {
+        print('Please select a file first.');
+      }
     }
   }
 
@@ -156,12 +202,24 @@ class _UploadFileState extends State<UploadFile> {
           ),
           ElevatedButton(
             onPressed: selectedFile != null ? loadCsvFile : null,
-            child: const Text('Učitaj'),
+            child: const Text('Učitaj CSV'),
           ),
-          const ElevatedButton(
-            onPressed: fetchUserListings,
-            child: Text('Listings'),
+          ElevatedButton(
+            onPressed: () {
+              _loadData();
+            },
+            child: Text('Učitaj aktivne oglase'),
           ),
+          ElevatedButton(
+            onPressed: () {
+              // NetworkService().fetchJsonFromDrive();
+              NetworkService().modifyJsonOnDrive();
+            },
+            child: Text('google drive'),
+          ),
+          if (_isLoading) CircularProgressIndicator(),
+          // Prikazujemo spinner dok se podaci učitavaju
+
           // ElevatedButton(
           //   onPressed: uploadListing,
           //   child: const Text('Objavi'),
@@ -180,7 +238,7 @@ Future<List<Listing>> fetchUserListings() async {
 
   while (hasMore) {
     var url = Uri.parse(
-        'https://api.olx.ba/users/RobikoShop/listings?page=$currentPage');
+        'https://api.olx.ba/users/RobikoShop/listings?per_page=1000&page=$currentPage');
 
     try {
       var response = await http.get(url, headers: {
@@ -195,7 +253,9 @@ Future<List<Listing>> fetchUserListings() async {
           for (var item in data['data']) {
             Listing listing = Listing.fromJson(item);
             listings.add(listing);
-            print(listing); // Print each listing object
+            if (kDebugMode) {
+              // print(listing);
+            } // Print each listing object
           }
         }
         // return listings;
@@ -205,13 +265,17 @@ Future<List<Listing>> fetchUserListings() async {
         currentPage++;
       } else {
         // Handle the case where the server does not return a 200 OK response
-        print('Failed to load listings. Status code: ${response.statusCode}');
+        if (kDebugMode) {
+          print('Failed to load listings. Status code: ${response.statusCode}');
+        }
         hasMore = false;
         return [];
       }
     } catch (e) {
       // Handle any errors that occur during the request
-      print('Error: $e');
+      if (kDebugMode) {
+        print('Error: $e');
+      }
       hasMore = false;
       return [];
     }

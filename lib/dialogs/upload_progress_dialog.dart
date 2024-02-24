@@ -3,14 +3,17 @@ import 'package:flutter/material.dart';
 class UploadProgressDialog extends StatefulWidget {
   final int totalProducts;
   final void Function(void Function(int, bool)) onUploadProgress;
+  final void Function(void Function()) onCancel;
 
   const UploadProgressDialog({
     Key? key,
     required this.totalProducts,
     required this.onUploadProgress,
+    required this.onCancel,
   }) : super(key: key);
 
   @override
+  // ignore: library_private_types_in_public_api
   _UploadProgressDialogState createState() => _UploadProgressDialogState();
 }
 
@@ -56,7 +59,11 @@ class _UploadProgressDialogState extends State<UploadProgressDialog> {
       ),
       actions: <Widget>[
         TextButton(
-          onPressed: () => Navigator.of(context).pop(),
+          onPressed: () => {
+            widget.onCancel((){
+              Navigator.of(context).pop();
+            }),
+          },
           child: const Text('Cancel'),
         ),
       ],
