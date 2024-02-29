@@ -1,6 +1,6 @@
 // komanda za pokrecanje: node --experimental-fetch getPictures.js
 const fs = require("fs");
-const PHPSESSID = "PHPSESSID=vga3fkmfahpf1fp95088rmr2ie";
+const PHPSESSID = "PHPSESSID=6kgosvckg1b3mdh4qlvm4lsr9g";
 
 const pretraziSliku = (pattern) => {
   return fetch(
@@ -53,7 +53,7 @@ const dohvatiSlikuPoBarkoduIKatBroju = async (barkod, katBroj) => {
   return slika;
 };
 
-const obradiCSV = (csvFilePath) => {
+const obradiCSVAk2 = (csvFilePath) => {
   const data = fs.readFileSync(csvFilePath, "utf8");
 
   const lines = data.split("\n");
@@ -64,6 +64,7 @@ const obradiCSV = (csvFilePath) => {
 
   lines.forEach((line) => {
     const parts = line.split(";");
+
     const katBroj = parts[6];
     const barkod = parts[5];
     const naziv = parts[7];
@@ -74,48 +75,132 @@ const obradiCSV = (csvFilePath) => {
   return artikli;
 };
 
+const obradiCSVNuic = (csvFilePath) => {
+  const data = fs.readFileSync(csvFilePath, "utf8");
+
+  let lines = data.split("\n");
+  lines.shift();
+
+  // Ograniči na prvih 100 linija (nakon uklanjanja zaglavlja)
+  // lines = lines.slice(0, 5000);
+
+  const artikli = {};
+
+  lines.forEach((line) => {
+    const parts = line.split(";");
+
+    const katBroj = parts[0];
+    const barkod = parts[1];
+
+    artikli[katBroj] = { katBroj, barkod };
+  });
+
+  return artikli;
+};
+
 const obrisiZagrade = (string) => {
   return string.split("(")[0].trim();
 };
 
-const obradiArtikle = async () => {
-  const artikliCSV = obradiCSV("assets/csv/ak2-finalno.csv");
-  const spremljeneSlike = await ucitajPodatke("getpictures/rezultatSlika.json");
+// const nuicBaseUrl = "https://digital-assets.tecalliance.services/images/400/";
+
+const obradiArtikle = async (maxParalelno = 2) => {
+  console.time("procesPretrazivanja");
+
+  const artikliCSV = obradiCSVNuic("assets/csv/nuic_5tisuca.csv");
+  const spremljeneSlike = await ucitajPodatke(
+    "getpictures/rezultatSlikaNuic.json"
+  );
+
   let index = 0;
-  for (const key of Object.keys(artikliCSV)) {
+  let obrade = [];
+  let totalCalls = 0;
+
+  const keys = Object.keys(artikliCSV);
+
+  for (const key of keys) {
     const artikl = artikliCSV[key];
     index++;
     console.log(
-      index + "/" + Object.keys(artikliCSV).length,
+      index + "/" + keys.length,
       "katBroj:" + artikl.katBroj,
-      spremljeneSlike[artikl.katBroj] && !artikl.katBroj.includes("(") ? "SKIPPED" : ""
+      spremljeneSlike[artikl.katBroj] ? "----SKIPPED" : ""
     );
 
-    if (spremljeneSlike[artikl.katBroj] && !artikl.katBroj.includes("(")) {
+    if (spremljeneSlike[artikl.katBroj] !== undefined) {
       continue;
     }
-    try {
-      const slika = await dohvatiSlikuPoBarkoduIKatBroju(
+
+    obrade.push(
+      dohvatiSlikuPoBarkoduIKatBroju(
         artikl.barkod,
         obrisiZagrade(artikl.katBroj)
-      );
-      spremljeneSlike[artikl.katBroj] = {
-        slika: slika ? slika : null,
-        naziv: artikl.naziv,
-        barkod: artikl.barkod,
-        katBroj: artikl.katBroj,
-      };
+      )
+        .then((slika) => {
+          spremljeneSlike[artikl.katBroj] = slika
+            ? slika.replace(
+                "https://digital-assets.tecalliance.services/images/400/",
+                ""
+              )
+            : null;
+        })
+        .catch((err) =>
+          console.log(
+            err,
+            "Neuspjesno dohvacanje slike za artikl: ",
+            artikl.katBroj
+          )
+        )
+    );
 
-      fs.writeFile(
-        "getpictures/rezultatSlika.json",
-        JSON.stringify(spremljeneSlike, null, 2),
-        "utf8",
-        (err) => {}
+    totalCalls++;
+
+    if (obrade.length >= maxParalelno || index === keys.length) {
+      await Promise.all(obrade).catch((err) =>
+        console.log(err, "problem kod Promise.all", err)
       );
-    } catch (err) {
-      console.log(err);
+      obrade = [];
+    }
+
+    if (totalCalls % 10 === 0) {
+      console.log("Total calls to server: ", totalCalls);
+    }
+
+    if (totalCalls % 20 === 0) {
+      try {
+        fs.writeFile(
+          "getpictures/rezultatSlikaNuic.json",
+          JSON.stringify(spremljeneSlike, null, 2),
+          "utf8",
+          (err) => {}
+        );
+        console.log('Saved to file')
+      } catch (err) {
+        console.log(err);
+      }
     }
   }
+
+  console.log("Total calls to server: ", totalCalls);
+  try {
+    fs.writeFile(
+      "getpictures/rezultatSlikaNuic.json",
+      JSON.stringify(spremljeneSlike, null, 2),
+      "utf8",
+      (err) => {}
+    );
+  } catch (err) {
+    console.log(err);
+  }
+  console.timeEnd("procesPretrazivanja");
 };
 
-obradiArtikle().catch(console.error);
+obradiArtikle(5).catch(console.error); // Primjer kako pozvati s parametrom za 3 paralelna poziva
+
+// s 3
+// Total calls to server:  155
+// procesPretrazivanja: 1:05.135 (m:ss.mmm)
+
+// s 6
+// Total calls to server:  155
+// procesPretrazivanja: 39.475s

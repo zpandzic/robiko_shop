@@ -1,11 +1,14 @@
 import 'package:robiko_shop/model/attribute_value.dart';
+import 'package:robiko_shop/model/json_saved_article.dart';
 import 'package:robiko_shop/model/listing.model.dart';
+import 'package:robiko_shop/model/nuic_csv.dart';
 import 'package:robiko_shop/model/visokaZaliheData.model.dart';
+import 'package:robiko_shop/product_repository.dart';
 
 class Product {
-  final String imageUrl;
+  String? imageUrl;
   String name;
-  final String code;
+  String? code;
   String catalogNumber;
   String description;
   late List<AttributeValue>? attributesList;
@@ -30,19 +33,46 @@ class Product {
   // Static method to map VisokaZalihe to Product
   static List<Product> fromVisokaZaliheList(
       List<VisokaZalihe> visokaZaliheList) {
-    return visokaZaliheList.map((visokaZalihe) {
-      return Product(
-        imageUrl: 'https://via.placeholder.com/150',
-        name: visokaZalihe.nazivRobe,
-        code: visokaZalihe.sifraRobe,
-        catalogNumber: visokaZalihe.katBroj,
-        description: 'Opis proizvoda',
-        category: null,
-        categoryId: null,
-        attributesList: null,
-        price: visokaZalihe.mpc,
-      );
-    }).toList();
+    return visokaZaliheList.fold<List<Product>>([],
+        (List<Product> list, VisokaZalihe visokaZalihe) {
+      //todo compare prices also
+      if (!ProductRepository()
+          .jsonSavedArticles
+          .containsKey(visokaZalihe.katBroj)) {
+        list.add(Product(
+          imageUrl: null,
+          name: visokaZalihe.nazivRobe,
+          code: visokaZalihe.sifraRobe,
+          catalogNumber: visokaZalihe.katBroj,
+          description: '',
+          category: null,
+          categoryId: null,
+          attributesList: null,
+          price: visokaZalihe.mpc,
+        ));
+      }
+      return list;
+    });
+  }
+
+  static List<Product> fromNuicList(List<NuicCsv> nuicList) {
+    return nuicList.fold<List<Product>>([], (List<Product> list, NuicCsv nuic) {
+      //todo compare prices also
+      if (!ProductRepository().jsonSavedArticles.containsKey(nuic.katBroj)) {
+        list.add(Product(
+          imageUrl: null,
+          name: nuic.nazivRobe,
+          code: null,
+          catalogNumber: nuic.katBroj,
+          description: '',
+          category: null,
+          categoryId: null,
+          attributesList: null,
+          price: nuic.mpc,
+        ));
+      }
+      return list;
+    });
   }
 
   Map<String, dynamic> toJson() {
@@ -80,20 +110,25 @@ class Product {
   // }
 
   Map<String, dynamic> toListing() {
-    // Kreirajte mapu bez ključa 'attributes' na početku
+    String description = this.description.isNotEmpty
+        ? "${this.description.split(";").map((item) => "<p>$item</p>").join("")}<p><br></p>"
+        : "";
+
+    description +=
+        "<p>Robiko d.o.o.</p><p><br></p><p>Autodijelovi<br>Servis<br>Optika trapa</p><p><br></p><p>Sovici bb Grude</p><p><br></p><p>08:00-16:00h</p><p><br></p><p>00387 39 670 959</p>";
+
     final Map<String, dynamic> listing = {
       'title': '$name $catalogNumber',
-      'listing_type': 'sell', // Assuming 'sell' as default
+      'listing_type': 'sell',
       'description': description,
       'price': price,
       'category_id': categoryId,
-      'available': true, // Assuming always true
+      'available': true,
       'state': 'new', // Assuming 'new' as default
       'country_id': 49, // Set default or dynamic value
       'city_id': 16, // Set default or dynamic value
     };
 
-    // Dodajte 'attributes' samo ako attributesList postoji i nije prazan
     if (attributesList != null && attributesList!.isNotEmpty) {
       listing['attributes'] = attributesList!
           .where((attr) => attr.value.isNotEmpty)
@@ -106,12 +141,18 @@ class Product {
 
   static Product fromListing(Listing listing) {
     return Product(
-      imageUrl: listing.image ?? 'https://via.placeholder.com/150', // Ako `listing.image` ne postoji, koristi placeholder
+      imageUrl: listing.image ?? 'https://via.placeholder.com/150',
+      // Ako `listing.image` ne postoji, koristi placeholder
       name: listing.title,
-      code: listing.id.toString(), // Pretvaranje `id` u string možda nije idealno za `code`, ali ovo je samo primjer
-      catalogNumber: '', // Ovisno o strukturi `Listing`, možda ćete trebati dodati odgovarajuće polje
-      description: 'Opis nije dostupan', // Pretpostavka da `Listing` sadrži `description`
-      category: null, // Možda će biti potrebno dodatno mapiranje za kategoriju
+      code: null,
+      listingId: listing.id.toString(),
+      // Pretvaranje `id` u string možda nije idealno za `code`, ali ovo je samo primjer
+      catalogNumber: '',
+      // Ovisno o strukturi `Listing`, možda ćete trebati dodati odgovarajuće polje
+      description: 'Opis nije dostupan',
+      // Pretpostavka da `Listing` sadrži `description`
+      category: null,
+      // Možda će biti potrebno dodatno mapiranje za kategoriju
       categoryId: listing.categoryId,
       price: listing.price,
       attributesList: [], // Ovisno o `Listing`, možda ćete trebati implementirati logiku za mapiranje atributa
@@ -135,7 +176,13 @@ class Product {
       // categoryId: listing.categoryId,
       // price: listing.price,
       // attributesList: [], // Ovisno o `Listing`, možda ćete trebati implementirati logiku za mapiranje atributa
-
     );
+  }
+
+  Map<String, dynamic> toJsonSavedArticle() {
+    return JsonSavedArticle(
+      listingId: listingId!,
+      price: price,
+    ).toJson();
   }
 }

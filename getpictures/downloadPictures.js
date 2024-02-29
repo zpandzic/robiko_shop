@@ -16,32 +16,6 @@ const ucitajPodatke = (filePath) => {
   });
 };
 
-const ucitajSlike = async () => {
-  const spremljeneSlike = await ucitajPodatke("getpictures/rezultatSlika.json");
-  let index = 0;
-
-  for (const katBroj of Object.keys(spremljeneSlike)) {
-    const slika = spremljeneSlike[katBroj].slika
-      ? spremljeneSlike[katBroj].slika
-      : null;
-    index++;
-    // console.log(slika)
-
-    if (slika) {
-      await preuzmiSliku(
-        slika,
-        katBroj,
-        index + "/" + Object.keys(spremljeneSlike).length,
-        "katBroj:" + katBroj
-      );
-    }
-
-    // const imeSlike = katBroj
-  }
-};
-
-ucitajSlike().catch(console.error);
-
 const preuzmiSliku = async (imageUrl, katBroj, log) => {
   const safeKatBroj = katBroj.replaceAll("/", "$");
 
@@ -53,19 +27,68 @@ const preuzmiSliku = async (imageUrl, katBroj, log) => {
     return;
   }
 
-  await axios({
-    method: "get",
-    url: imageUrl,
-    responseType: "stream",
-  })
-    .then((response) => {
-      if (!fs.existsSync(saveFolderPath)) {
-        fs.mkdirSync(saveFolderPath);
-      }
-      response.data.pipe(fs.createWriteStream(savePath));
-      console.log(log, `Image downloaded and saved to ${savePath}`);
-    })
-    .catch((error) => {
-      console.error("Error downloading the image:", error);
+  try {
+    const response = await axios({
+      method: "get",
+      url: imageUrl,
+      responseType: "stream",
     });
+    if (!fs.existsSync(saveFolderPath)) {
+      fs.mkdirSync(saveFolderPath, { recursive: true });
+    }
+    response.data.pipe(fs.createWriteStream(savePath));
+    console.log(log, `Image downloaded and saved to ${savePath}`);
+  } catch (error) {
+    console.error("Error downloading the image:", error);
+  }
+
+  // await axios({
+  //   method: "get",
+  //   url: imageUrl,
+  //   responseType: "stream",
+  // })
+  //   .then((response) => {
+  //     if (!fs.existsSync(saveFolderPath)) {
+  //       fs.mkdirSync(saveFolderPath);
+  //     }
+  //     response.data.pipe(fs.createWriteStream(savePath));
+  //     console.log(log, `Image downloaded and saved to ${savePath}`);
+  //   })
+  //   .catch((error) => {
+  //     console.error("Error downloading the image:", error);
+  //   });
 };
+
+const ucitajSlike = async (maxParalelno = 5) => {
+  const spremljeneSlike = await ucitajPodatke("getpictures/rezultatSlikaNuic.json");
+  const keys = Object.keys(spremljeneSlike);
+  let obrade = [];
+
+  for (let i = 0; i < keys.length; i++) {
+    const katBroj = keys[i];
+    let slika = spremljeneSlike[katBroj] ? spremljeneSlike[katBroj] : null;
+
+    if (slika) {
+      console.log(slika)
+      if (!slika.includes("https://")) {
+        slika = `https://digital-assets.tecalliance.services/images/400/${slika}`;
+      }
+
+      obrade.push(
+        preuzmiSliku(
+          slika,
+          katBroj,
+          `${i + 1}/${keys.length}, katBroj: ${katBroj}`
+        )
+      );
+    }
+
+    // Kada dostignemo maksimalni broj paralelnih preuzimanja ili dođemo do kraja liste
+    if (obrade.length >= maxParalelno || i === keys.length - 1) {
+      await Promise.all(obrade);
+      obrade = []; // Resetiramo niz za sljedeću grupu preuzimanja
+    }
+  }
+};
+
+ucitajSlike(100).catch(console.error);

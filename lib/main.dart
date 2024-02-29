@@ -1,8 +1,19 @@
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
+import 'package:robiko_shop/product_repository.dart';
 import 'package:robiko_shop/screens/products_screen.dart';
 import 'package:robiko_shop/upload_file.dart';
 
-void main() {
+import 'firebase_options.dart';
+
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+
+  await ProductRepository().initializeData();
+
   runApp(const MyApp());
 }
 

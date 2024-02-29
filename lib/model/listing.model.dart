@@ -1,3 +1,5 @@
+// ignore_for_file: non_constant_identifier_names
+
 class Listing {
   final dynamic score;
   final int id;

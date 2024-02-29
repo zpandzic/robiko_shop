@@ -3,10 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:robiko_shop/Widgets/products_list_widget.dart';
-import 'package:robiko_shop/attribute_helper.dart';
-import 'package:robiko_shop/dialog_service.dart';
 import 'package:robiko_shop/dialogs/upload_progress_dialog.dart';
-import 'package:robiko_shop/model/attribute_value.dart';
 import 'package:robiko_shop/model/product.model.dart';
 import 'package:robiko_shop/network_service.dart';
 import 'package:robiko_shop/product_repository.dart';
@@ -20,15 +17,7 @@ class ProductsScreen extends StatefulWidget {
 
 class ProductsScreenState extends State<ProductsScreen>
     with TickerProviderStateMixin {
-  final NetworkService networkService = NetworkService();
-  final AttributeHelper attributeHelper = AttributeHelper();
-  final DialogService dialogService = DialogService();
   late final TabController _tabController;
-  Map<int, String> attributeValues = {};
-  Map<String, bool> selectedProductsReadyForUpload = {};
-  late int? selectedCategoryId;
-  late String? selectedCategoryName;
-  late List<AttributeValue>? attributesList;
 
   @override
   void initState() {
@@ -47,8 +36,6 @@ class ProductsScreenState extends State<ProductsScreen>
         .where((element) =>
             selectedProductsReadyForUpload[element.catalogNumber] == true)
         .toList();
-    // .map((product) => product.toJson())
-    // .toList();
 
     if (productsJson.isEmpty) {
       //show message
@@ -72,11 +59,15 @@ class ProductsScreenState extends State<ProductsScreen>
     }
 
     try {
-      await uploadListings(productsJson, context);
+      var successfulUploads = await uploadListings(productsJson, context);
+      ProductRepository().removeUploadedProducts(successfulUploads);
       ProductRepository()
-          .removeUploadedProducts(productsJson);
+          .refreshUserListings()
+          .then((value) => setState(() {}));
     } catch (e) {
-      print(e);
+      if (kDebugMode) {
+        print(e);
+      }
     }
 
     if (kDebugMode) {
@@ -93,11 +84,13 @@ class ProductsScreenState extends State<ProductsScreen>
     }
   }
 
-  Future<void> uploadListings(
+  Future<List<Product>> uploadListings(
       List<Product> products, BuildContext context) async {
     void Function(int, bool)? updateProgress;
     bool isUploadCancelled = false;
     bool isUploadInProgress = true;
+
+    List<Product> successfulUploads = [];
 
     showDialog(
       context: context,
@@ -120,7 +113,7 @@ class ProductsScreenState extends State<ProductsScreen>
                 return AlertDialog(
                   title: const Text('Prekid'),
                   content: const Text(
-                      'Da li ste sigurni da želite prekinuti upload?'),
+                      'Jeste li ste sigurni da želite prekinuti učitavanje?'),
                   actions: <Widget>[
                     TextButton(
                       onPressed: () {
@@ -154,15 +147,16 @@ class ProductsScreenState extends State<ProductsScreen>
       }
 
       try {
-        String listingId = await networkService.uploadListing(
-            product.toListing(), product.catalogNumber);
+        String listingId = await NetworkService()
+            .uploadListing(product.toListing(), product.catalogNumber);
 
-        await Future.delayed(const Duration(milliseconds: 100));
+        // await Future.delayed(const Duration(milliseconds: 100));
 
         if (updateProgress != null) {
           updateProgress!(currentIndex, true);
         }
         product.listingId = listingId;
+        successfulUploads.add(product);
       } catch (e) {
         if (updateProgress != null) {
           updateProgress!(currentIndex, false);
@@ -170,7 +164,13 @@ class ProductsScreenState extends State<ProductsScreen>
       }
     }
 
+    if (successfulUploads.isNotEmpty) {
+          await NetworkService().modifyAndUploadJson(successfulUploads);
+    }
+
     isUploadInProgress = false;
+
+    return successfulUploads;
   }
 
   @override
@@ -190,14 +190,16 @@ class ProductsScreenState extends State<ProductsScreen>
             labelColor: Colors.black,
             tabs: <Widget>[
               Tab(
-                  text:
-                      'Neobjavljeno (${ProductRepository().products.length})'),
+                text: 'Uvezeno (${ProductRepository().products.length})',
+              ),
               Tab(
-                  text:
-                      'Za objavu (${ProductRepository().readyForPublishList.length})'),
+                text:
+                    'Za objavu (${ProductRepository().readyForPublishList.length})',
+              ),
               Tab(
-                  text:
-                      'Aktivni (${ProductRepository().activeProductList.length})'),
+                text:
+                    'Aktivni (${ProductRepository().activeProductList.length})',
+              ),
             ],
           ),
           Expanded(
@@ -207,6 +209,8 @@ class ProductsScreenState extends State<ProductsScreen>
                 ProductsListWidget(
                   productList: ProductRepository().products,
                   refreshState: refreshState,
+                  obrisi: true,
+                  postaviKategoriju: true,
 
                   // showActionSheet: _showActionSheet,
                 ),
@@ -214,11 +218,15 @@ class ProductsScreenState extends State<ProductsScreen>
                   productList: ProductRepository().readyForPublishList,
                   refreshState: refreshState,
                   objavi: objavi,
+                  obrisi: true,
+                  postaviKategoriju: true,
                   // showActionSheet: _showActionSheet,
                 ),
                 ProductsListWidget(
                   productList: ProductRepository().activeProductList,
                   refreshState: refreshState,
+                  aktivni: true,
+
                   // showActionSheet: _showActionSheet,
                 ),
               ],

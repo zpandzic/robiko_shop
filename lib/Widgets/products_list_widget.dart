@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:robiko_shop/Widgets/product_widget.dart';
 import 'package:robiko_shop/attribute_helper.dart';
 import 'package:robiko_shop/dialog_service.dart';
+import 'package:robiko_shop/dialogs/upload_progress_dialog.dart';
 import 'package:robiko_shop/model/product.model.dart';
 import 'package:robiko_shop/network_service.dart';
 import 'package:robiko_shop/product_repository.dart';
@@ -12,11 +13,17 @@ class ProductsListWidget extends StatefulWidget {
   // final void Function() showActionSheet;
   final void Function(BuildContext, Map<String, bool>)? objavi;
   final void Function() refreshState;
+  final bool? aktivni;
+  final bool? obrisi;
+  final bool? postaviKategoriju;
 
   const ProductsListWidget({
     required this.productList,
     this.objavi,
     required this.refreshState,
+    this.aktivni,
+    this.obrisi,
+    this.postaviKategoriju,
     Key? key,
   }) : super(key: key);
 
@@ -40,13 +47,20 @@ class ProductsListWidgetState extends State<ProductsListWidget> {
 
   // late List<AttributeValue>? attributesList;
 
+  String getID(Product product) {
+    return widget.aktivni == true
+        ? product.listingId.toString()
+        : product.catalogNumber;
+  }
+
   @override
   void initState() {
     super.initState();
     filteredProducts = widget.productList;
     searchController.addListener(_filterProducts);
+
     for (var product in widget.productList) {
-      selectedProducts[product.catalogNumber] = false;
+      selectedProducts[getID(product)] = false;
     }
   }
 
@@ -60,8 +74,11 @@ class ProductsListWidgetState extends State<ProductsListWidget> {
     setState(() {
       filteredProducts = widget.productList.where((product) {
         return product.name
-            .toLowerCase()
-            .contains(searchController.text.toLowerCase());
+                .toLowerCase()
+                .contains(searchController.text.toLowerCase()) ||
+            product.catalogNumber
+                .toLowerCase()
+                .contains(searchController.text.toLowerCase());
       }).toList();
     });
   }
@@ -69,25 +86,26 @@ class ProductsListWidgetState extends State<ProductsListWidget> {
   void _selectAllProducts() {
     setState(() {
       bool areAllSelected = filteredProducts.every(
-        (product) => selectedProducts[product.catalogNumber] ?? false,
+        (product) => selectedProducts[getID(product)] ?? false,
       );
 
       for (var product in filteredProducts) {
-        selectedProducts[product.catalogNumber] = !areAllSelected;
+        selectedProducts[getID(product)] = !areAllSelected;
       }
     });
   }
 
-  void _deleteProduct(String catalogNumber) {
-    // setState(() {
-    //   ProductRepository().deleteProduct(catalogNumber);
-    // });
+  void _deleteProduct(product) {
+    setState(() {
+      selectedProducts.remove(getID(product));
+      widget.productList.remove(product);
+      widget.refreshState();
+    });
   }
 
-  void _toggleProductSelection(String catalogNumber) {
+  void _toggleProductSelection(String id) {
     setState(() {
-      selectedProducts[catalogNumber] =
-          !(selectedProducts[catalogNumber] ?? false);
+      selectedProducts[id] = !(selectedProducts[id] ?? false);
     });
   }
 
@@ -102,8 +120,7 @@ class ProductsListWidgetState extends State<ProductsListWidget> {
           (selectedAttributes) {
             setState(() {
               List<Product> productsToUpdate = filteredProducts
-                  .where((element) =>
-                      selectedProducts[element.catalogNumber] == true)
+                  .where((element) => selectedProducts[getID(element)] == true)
                   .toList();
 
               for (var product in productsToUpdate) {
@@ -126,17 +143,138 @@ class ProductsListWidgetState extends State<ProductsListWidget> {
 
   void _deleteSelectedProducts() {
     setState(() {
-      widget.productList.removeWhere(
-          (product) => selectedProducts[product.catalogNumber] ?? false);
+      widget.productList
+          .removeWhere((product) => selectedProducts[getID(product)] ?? false);
       selectedProducts.clear();
 
       for (var product in widget.productList) {
-        selectedProducts[product.catalogNumber] = false;
+        selectedProducts[getID(product)] = false;
       }
 
       widget.refreshState();
     });
   }
+
+  Future<void> checkLimitsAndRefreshProducts() async {
+    bool isRefreshCancelled = false;
+    bool isRefreshInProgress = true;
+    int currentIndex = 0;
+
+    List<Product> productsToRefresh = [];
+    selectedProducts.forEach((id, isSelected) {
+      if (isSelected) {
+        // Pronađi proizvod po ID-u i dodaj ga u listu za osvježavanje
+        var product =
+            widget.productList.firstWhere((product) => getID(product) == id);
+        if (product != null) {
+          productsToRefresh.add(product);
+        }
+      }
+    });
+
+    int totalProducts = productsToRefresh.length;
+
+    int successfulRefreshes = 0;
+    int failedRefreshes = 0;
+
+    void Function(int, bool)? updateProgress;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return UploadProgressDialog(
+          totalProducts: totalProducts,
+          onUploadProgress: (update) {
+            updateProgress = update;
+          },
+          onCancel: (callback) {
+            if (!isRefreshInProgress) {
+              Navigator.of(context).pop();
+              return;
+            }
+            showDialog(
+              context: context,
+              builder: (BuildContext context) {
+                return AlertDialog(
+                  title: const Text('Prekid'),
+                  content: const Text(
+                      'Jeste li sigurni da želite prekinuti osvježavanje?'),
+                  actions: <Widget>[
+                    TextButton(
+                      onPressed: () {
+                        Navigator.of(context).pop();
+                      },
+                      child: const Text('Ne'),
+                    ),
+                    TextButton(
+                      onPressed: () {
+                        Navigator.of(context).pop();
+                        callback();
+                        isRefreshCancelled = true;
+                      },
+                      child: const Text('Da'),
+                    ),
+                  ],
+                );
+              },
+            );
+          },
+        );
+      },
+    );
+
+    for (var product in productsToRefresh) {
+      currentIndex++;
+      if (isRefreshCancelled) break;
+
+      try {
+        // Logika za osvježavanje proizvoda
+        await networkService.refreshListing(product.listingId!);
+        successfulRefreshes++;
+        updateProgress?.call(currentIndex, true);
+      } catch (e) {
+        failedRefreshes++;
+        updateProgress?.call(currentIndex, false);
+        print("Greška pri osvježavanju proizvoda: $e");
+      }
+    }
+
+    isRefreshInProgress = false;
+
+    if (!isRefreshCancelled) {
+      Navigator.of(context).pop(); // Zatvara UploadProgressDialog
+      // Opcionalno: prikaži sažetak operacije
+    }
+  }
+
+  // Future<void> checkLimitsAndRefreshProducts() async {
+  //   try {
+  //     // Dohvaćanje limita
+  //     Map<String, dynamic> limits = await networkService.fetchListingRefreshLimits();
+  //     print("Limiti: $limits");
+  //
+  //     // Ovdje možete dodati logiku za provjeru da li su dostupni limiti za osvježavanje
+  //     // Na primjer, provjerite da li je 'free_limit' veći od 0
+  //     // Ova logika će ovisiti o strukturi odgovora API-ja i vašim specifičnim potrebama
+  //
+  //     // Ako su limiti dostupni, osvježite artikle
+  //     for (var listingId in selectedProducts.keys) {
+  //       if (selectedProducts[listingId] ?? false) {
+  //         // Osvježite artikal
+  //         String message = await networkService.refreshListing(listingId);
+  //         print("Osvježavanje artikla $listingId: $message");
+  //       }
+  //     }
+  //
+  //     // Nakon osvježavanja, možda ćete htjeti ažurirati stanje UI-a ili dohvatiti ažurirane podatke
+  //     setState(() {
+  //       // Ažuriranje UI-a ili podataka ako je potrebno
+  //     });
+  //   } catch (error) {
+  //     print("Došlo je do greške: $error");
+  //   }
+  // }
 
   void _showActionSheet() {
     showModalBottomSheet(
@@ -145,22 +283,24 @@ class ProductsListWidgetState extends State<ProductsListWidget> {
         return SafeArea(
           child: Wrap(
             children: <Widget>[
-              ListTile(
-                leading: const Icon(Icons.delete),
-                title: const Text('Obriši odabrane artikle'),
-                onTap: () {
-                  Navigator.pop(context);
-                  _deleteSelectedProducts();
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.category),
-                title: const Text('Postavi kategoriju za odabrane artikle'),
-                onTap: () {
-                  Navigator.pop(context);
-                  _setCategoryForSelectedProducts();
-                },
-              ),
+              if (widget.obrisi == true)
+                ListTile(
+                  leading: const Icon(Icons.delete),
+                  title: const Text('Obriši odabrane artikle'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    _deleteSelectedProducts();
+                  },
+                ),
+              if (widget.postaviKategoriju == true)
+                ListTile(
+                  leading: const Icon(Icons.category),
+                  title: const Text('Postavi kategoriju za odabrane artikle'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    _setCategoryForSelectedProducts();
+                  },
+                ),
               widget.objavi != null
                   ? ListTile(
                       leading: const Icon(Icons.warning),
@@ -171,6 +311,13 @@ class ProductsListWidgetState extends State<ProductsListWidget> {
                       },
                     )
                   : const SizedBox(),
+              if(widget.aktivni ==true) ListTile(
+                leading: const Icon(Icons.cancel),
+                title: const Text('Osvjezi odabrane artikle'),
+                onTap: () {
+                  checkLimitsAndRefreshProducts();
+                },
+              )
             ],
           ),
         );
@@ -213,7 +360,7 @@ class ProductsListWidgetState extends State<ProductsListWidget> {
                   decoration: InputDecoration(
                     filled: true,
                     fillColor: Colors.white,
-                    labelText: 'Pretraži po nazivu',
+                    labelText: 'Pretraži',
                     suffixIcon: const Icon(Icons.search),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(30.0),
@@ -228,11 +375,21 @@ class ProductsListWidgetState extends State<ProductsListWidget> {
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16.0),
               child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: <Widget>[
                   TextButton(
                     onPressed: _selectAllProducts,
-                    child: const Text('Označi sve'),
+                    child: Text('Označi sve (${filteredProducts.length})'),
                   ),
+                  if (widget.aktivni != null)
+                    TextButton(
+                      onPressed: () {
+                        ProductRepository().refreshUserListings().then((value) {
+                          widget.refreshState();
+                        });
+                      },
+                      child: const Text('Osvježi'),
+                    ),
                 ],
               ),
             ),
@@ -245,7 +402,7 @@ class ProductsListWidgetState extends State<ProductsListWidget> {
                     return ProductWidget(
                       product: product,
                       onDelete: () {
-                        _deleteProduct(product.catalogNumber);
+                        _deleteProduct(product);
                       },
                       onEdit: () {
                         dialogService.showEditDialog(
@@ -258,10 +415,9 @@ class ProductsListWidgetState extends State<ProductsListWidget> {
                           },
                         );
                       },
-                      isSelected:
-                          selectedProducts[product.catalogNumber] ?? false,
+                      isSelected: selectedProducts[getID(product)] ?? false,
                       onSelected: () {
-                        _toggleProductSelection(product.catalogNumber);
+                        _toggleProductSelection(getID(product));
                       },
                     );
                   },

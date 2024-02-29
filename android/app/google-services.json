@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "767061599228",
+    "project_id": "robikoshop-1df62",
+    "storage_bucket": "robikoshop-1df62.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:767061599228:android:385b2df861ce704d658879",
+        "android_client_info": {
+          "package_name": "com.example.robiko_shop"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBMZ_k9ew7nZ1E-3gAuMyEzI6weRn4KeAw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
