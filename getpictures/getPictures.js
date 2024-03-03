@@ -107,7 +107,7 @@ const obrisiZagrade = (string) => {
 const obradiArtikle = async (maxParalelno = 2) => {
   console.time("procesPretrazivanja");
 
-  const artikliCSV = obradiCSVNuic("assets/csv/nuic_5tisuca.csv");
+  const artikliCSV = obradiCSVNuic("assets/csv/nuic.csv");
   const spremljeneSlike = await ucitajPodatke(
     "getpictures/rezultatSlikaNuic.json"
   );
@@ -174,7 +174,7 @@ const obradiArtikle = async (maxParalelno = 2) => {
           "utf8",
           (err) => {}
         );
-        console.log('Saved to file')
+        console.log("Saved to file");
       } catch (err) {
         console.log(err);
       }
@@ -195,7 +195,7 @@ const obradiArtikle = async (maxParalelno = 2) => {
   console.timeEnd("procesPretrazivanja");
 };
 
-obradiArtikle(5).catch(console.error); // Primjer kako pozvati s parametrom za 3 paralelna poziva
+// obradiArtikle(1).catch(console.error); // Primjer kako pozvati s parametrom za 3 paralelna poziva
 
 // s 3
 // Total calls to server:  155
@@ -204,3 +204,70 @@ obradiArtikle(5).catch(console.error); // Primjer kako pozvati s parametrom za 3
 // s 6
 // Total calls to server:  155
 // procesPretrazivanja: 39.475s
+
+const napraviZaImport = async () => {
+  const spremljeneSlike = await ucitajPodatke(
+    "getpictures/rezultatSlikaNuic.json"
+  );
+
+  const artikli = {};
+
+  const listingIdJson = await ucitajPodatke("getpictures/katbroj_id.json");
+  const artikliAk2 = obradiCSVAk2("assets/csv/ak2-finalno.csv");
+
+  Object.keys(artikliAk2).forEach((key) => {
+    const artikl = artikliAk2[key];
+
+    let slikaUrl = spremljeneSlike[artikl.katBroj];
+
+    if (slikaUrl && !spremljeneSlike[artikl.katBroj]?.includes("https://")) {
+      slikaUrl = `https://digital-assets.tecalliance.services/images/400/${slikaUrl}`;
+    }
+
+    const newKey = key.replace(/[$#.\[\]\/]/g, "_");
+
+    if (newKey.length) {
+      artikli[newKey] = {
+        katBroj: artikl.katBroj,
+        barkod: artikl.barkod,
+        slika: slikaUrl,
+        listingId: listingIdJson[artikl.katBroj]?.listingId ?? null,
+        price: listingIdJson[artikl.katBroj]?.price ?? null,
+      };
+    }
+  });
+
+  const artikliNuic = obradiCSVNuic("assets/csv/nuic.csv");
+
+  Object.keys(artikliNuic).forEach((key) => {
+
+    const artikl = artikliNuic[key];
+
+    let slikaUrl = spremljeneSlike[artikl.katBroj];
+
+    if (slikaUrl &&!spremljeneSlike[artikl.katBroj]?.includes("https://")) {
+      slikaUrl = `https://digital-assets.tecalliance.services/images/400/${slikaUrl}`;
+    }
+
+    const newKey = key.replace(/[$#.\[\]\/]/g, '_');
+
+    if(newKey.length){
+      artikli[newKey] ={
+        katBroj: artikl.katBroj,
+        barkod: artikl.barkod,
+        slika: slikaUrl,
+        listingId: listingIdJson[artikl.katBroj]?.listingId ?? null,
+        price: listingIdJson[artikl.katBroj]?.price ?? null,
+      };
+    }
+  });
+
+  fs.writeFile(
+    "getpictures/zaimport.json",
+    JSON.stringify(artikli, null, 2),
+    "utf8",
+    (err) => {}
+  );
+};
+
+napraviZaImport();

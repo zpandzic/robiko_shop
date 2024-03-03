@@ -69,7 +69,7 @@ const ucitajSlike = async (maxParalelno = 5) => {
     let slika = spremljeneSlike[katBroj] ? spremljeneSlike[katBroj] : null;
 
     if (slika) {
-      console.log(slika)
+      // console.log(slika)
       if (!slika.includes("https://")) {
         slika = `https://digital-assets.tecalliance.services/images/400/${slika}`;
       }
