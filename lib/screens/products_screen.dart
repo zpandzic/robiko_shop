@@ -7,6 +7,8 @@ import 'package:robiko_shop/dialogs/upload_progress_dialog.dart';
 import 'package:robiko_shop/model/product.model.dart';
 import 'package:robiko_shop/network_service.dart';
 import 'package:robiko_shop/product_repository.dart';
+import 'package:robiko_shop/services/dialog_service.dart';
+import 'package:robiko_shop/services/firebase_service.dart';
 
 class ProductsScreen extends StatefulWidget {
   const ProductsScreen({super.key});
@@ -29,8 +31,7 @@ class ProductsScreenState extends State<ProductsScreen>
     setState(() {});
   }
 
-  Future<void> objavi(BuildContext context,
-      Map<String, bool> selectedProductsReadyForUpload) async {
+  Future<void> objavi(Map<String, bool> selectedProductsReadyForUpload) async {
     List<Product> productsJson = ProductRepository()
         .readyForPublishList
         .where((element) =>
@@ -60,27 +61,24 @@ class ProductsScreenState extends State<ProductsScreen>
 
     try {
       var successfulUploads = await uploadListings(productsJson, context);
-      ProductRepository().removeUploadedProducts(successfulUploads);
-      ProductRepository()
-          .refreshUserListings()
-          .then((value) => setState(() {}));
+
+      DialogService().showLoadingDialog(context);
+
+      await ProductRepository().refreshUserListings().then(
+            (value) => setState(() {
+              ProductRepository().removeUploadedProducts(successfulUploads);
+            }),
+          );
+
+      Navigator.of(context).pop();
+
+      if (kDebugMode) {
+        print(jsonEncode(successfulUploads));
+      }
     } catch (e) {
       if (kDebugMode) {
         print(e);
       }
-    }
-
-    if (kDebugMode) {
-      print(jsonEncode(productsJson));
-    }
-  }
-
-  void printFormattedJson(Map<String, dynamic> jsonData) {
-    JsonEncoder encoder =
-        const JsonEncoder.withIndent('  '); // Two-space indentation
-    String prettyPrint = encoder.convert(jsonData);
-    if (kDebugMode) {
-      print(prettyPrint);
     }
   }
 
@@ -150,8 +148,6 @@ class ProductsScreenState extends State<ProductsScreen>
         String listingId = await NetworkService()
             .uploadListing(product.toListing(), product.catalogNumber);
 
-        // await Future.delayed(const Duration(milliseconds: 100));
-
         if (updateProgress != null) {
           updateProgress!(currentIndex, true);
         }
@@ -165,7 +161,15 @@ class ProductsScreenState extends State<ProductsScreen>
     }
 
     if (successfulUploads.isNotEmpty) {
-          await NetworkService().modifyAndUploadJson(successfulUploads);
+      try {
+        await FirebaseService().addProducts(successfulUploads);
+      } catch (e) {
+        DialogService().showWarningDialog(
+          context,
+          'Greška',
+          e.toString(),
+        );
+      }
     }
 
     isUploadInProgress = false;

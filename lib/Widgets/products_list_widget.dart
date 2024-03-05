@@ -1,17 +1,19 @@
+import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:robiko_shop/Widgets/product_widget.dart';
 import 'package:robiko_shop/attribute_helper.dart';
-import 'package:robiko_shop/dialog_service.dart';
 import 'package:robiko_shop/dialogs/upload_progress_dialog.dart';
 import 'package:robiko_shop/model/product.model.dart';
 import 'package:robiko_shop/network_service.dart';
 import 'package:robiko_shop/product_repository.dart';
+import 'package:robiko_shop/services/dialog_service.dart';
 
 class ProductsListWidget extends StatefulWidget {
   final List<Product> productList;
 
   // final void Function() showActionSheet;
-  final void Function(BuildContext, Map<String, bool>)? objavi;
+  final void Function(Map<String, bool>)? objavi;
   final void Function() refreshState;
   final bool? aktivni;
   final bool? obrisi;
@@ -62,6 +64,17 @@ class ProductsListWidgetState extends State<ProductsListWidget> {
     for (var product in widget.productList) {
       selectedProducts[getID(product)] = false;
     }
+  }
+
+  void resetState() {
+    setState(() {
+      filteredProducts = widget.productList;
+      searchController.clear();
+      selectedProducts.clear();
+      for (var product in widget.productList) {
+        selectedProducts[getID(product)] = false;
+      }
+    });
   }
 
   @override
@@ -155,6 +168,13 @@ class ProductsListWidgetState extends State<ProductsListWidget> {
     });
   }
 
+  Future<void> reloadUserListings() async {
+    await ProductRepository().refreshUserListings();
+
+    widget.refreshState();
+    resetState();
+  }
+
   Future<void> checkLimitsAndRefreshProducts() async {
     bool isRefreshCancelled = false;
     bool isRefreshInProgress = true;
@@ -166,9 +186,7 @@ class ProductsListWidgetState extends State<ProductsListWidget> {
         // Pronađi proizvod po ID-u i dodaj ga u listu za osvježavanje
         var product =
             widget.productList.firstWhere((product) => getID(product) == id);
-        if (product != null) {
-          productsToRefresh.add(product);
-        }
+        productsToRefresh.add(product);
       }
     });
 
@@ -236,7 +254,9 @@ class ProductsListWidgetState extends State<ProductsListWidget> {
       } catch (e) {
         failedRefreshes++;
         updateProgress?.call(currentIndex, false);
-        print("Greška pri osvježavanju proizvoda: $e");
+        if (kDebugMode) {
+          print("Greška pri osvježavanju proizvoda: $e");
+        }
       }
     }
 
@@ -307,17 +327,18 @@ class ProductsListWidgetState extends State<ProductsListWidget> {
                       title: const Text('Objavi'),
                       onTap: () {
                         Navigator.pop(context);
-                        widget.objavi!(context, selectedProducts);
+                        widget.objavi!(selectedProducts);
                       },
                     )
                   : const SizedBox(),
-              if(widget.aktivni ==true) ListTile(
-                leading: const Icon(Icons.cancel),
-                title: const Text('Osvjezi odabrane artikle'),
-                onTap: () {
-                  checkLimitsAndRefreshProducts();
-                },
-              )
+              if (widget.aktivni == true)
+                ListTile(
+                  leading: const Icon(Icons.cancel),
+                  title: const Text('Osvjezi odabrane artikle'),
+                  onTap: () {
+                    checkLimitsAndRefreshProducts();
+                  },
+                )
             ],
           ),
         );
@@ -381,50 +402,46 @@ class ProductsListWidgetState extends State<ProductsListWidget> {
                     onPressed: _selectAllProducts,
                     child: Text('Označi sve (${filteredProducts.length})'),
                   ),
-                  if (widget.aktivni != null)
-                    TextButton(
-                      onPressed: () {
-                        ProductRepository().refreshUserListings().then((value) {
-                          widget.refreshState();
-                        });
-                      },
-                      child: const Text('Osvježi'),
-                    ),
                 ],
               ),
             ),
             Expanded(
-              child: Card(
-                child: ListView.separated(
-                  itemCount: filteredProducts.length,
-                  itemBuilder: (context, index) {
-                    final product = filteredProducts[index];
-                    return ProductWidget(
-                      product: product,
-                      onDelete: () {
-                        _deleteProduct(product);
-                      },
-                      onEdit: () {
-                        dialogService.showEditDialog(
-                          product,
-                          index,
-                          context,
-                          (updatedProduct) {
-                            updatedProduct();
-                            widget.refreshState();
-                          },
-                        );
-                      },
-                      isSelected: selectedProducts[getID(product)] ?? false,
-                      onSelected: () {
-                        _toggleProductSelection(getID(product));
-                      },
-                    );
-                  },
-                  separatorBuilder: (context, index) =>
-                      const SizedBox(height: 8.0),
-                ),
-              ),
+              child: RefreshIndicator(
+                  onRefresh: widget.aktivni == true
+                      ? reloadUserListings
+                      : () async {
+                          // widget.refreshState();
+                        },
+                  child: ListView.separated(
+                    dragStartBehavior: DragStartBehavior.down,
+                    itemCount: filteredProducts.length,
+                    itemBuilder: (context, index) {
+                      final product = filteredProducts[index];
+                      return ProductWidget(
+                        product: product,
+                        onDelete: () {
+                          _deleteProduct(product);
+                        },
+                        onEdit: () {
+                          dialogService.showEditDialog(
+                            product,
+                            index,
+                            context,
+                            (updatedProduct) {
+                              updatedProduct();
+                              widget.refreshState();
+                            },
+                          );
+                        },
+                        isSelected: selectedProducts[getID(product)] ?? false,
+                        onSelected: () {
+                          _toggleProductSelection(getID(product));
+                        },
+                      );
+                    },
+                    separatorBuilder: (context, index) =>
+                        const SizedBox(height: 8.0),
+                  )),
             ),
           ],
         ));

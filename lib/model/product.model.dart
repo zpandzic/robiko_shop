@@ -1,9 +1,9 @@
 import 'package:robiko_shop/model/attribute_value.dart';
-import 'package:robiko_shop/model/json_saved_article.dart';
 import 'package:robiko_shop/model/listing.model.dart';
 import 'package:robiko_shop/model/nuic_csv.dart';
 import 'package:robiko_shop/model/visokaZaliheData.model.dart';
 import 'package:robiko_shop/product_repository.dart';
+import 'package:robiko_shop/services/firebase_service.dart';
 
 class Product {
   String? imageUrl;
@@ -37,8 +37,8 @@ class Product {
         (List<Product> list, VisokaZalihe visokaZalihe) {
       //todo compare prices also
       if (!ProductRepository()
-          .jsonSavedArticles
-          .containsKey(visokaZalihe.katBroj)) {
+          .firebaseUploadedListings
+          .containsKey(FirebaseService().sanitizeKey(visokaZalihe.katBroj))) {
         list.add(Product(
           imageUrl: null,
           name: visokaZalihe.nazivRobe,
@@ -58,7 +58,10 @@ class Product {
   static List<Product> fromNuicList(List<NuicCsv> nuicList) {
     return nuicList.fold<List<Product>>([], (List<Product> list, NuicCsv nuic) {
       //todo compare prices also
-      if (!ProductRepository().jsonSavedArticles.containsKey(nuic.katBroj)) {
+
+      if (!ProductRepository()
+          .firebaseUploadedListings
+          .containsKey(FirebaseService().sanitizeKey(nuic.katBroj))) {
         list.add(Product(
           imageUrl: null,
           name: nuic.nazivRobe,
@@ -141,48 +144,16 @@ class Product {
 
   static Product fromListing(Listing listing) {
     return Product(
-      imageUrl: listing.image ?? 'https://via.placeholder.com/150',
-      // Ako `listing.image` ne postoji, koristi placeholder
+      imageUrl: listing.image,
       name: listing.title,
       code: null,
       listingId: listing.id.toString(),
-      // Pretvaranje `id` u string možda nije idealno za `code`, ali ovo je samo primjer
       catalogNumber: '',
-      // Ovisno o strukturi `Listing`, možda ćete trebati dodati odgovarajuće polje
       description: 'Opis nije dostupan',
-      // Pretpostavka da `Listing` sadrži `description`
       category: null,
-      // Možda će biti potrebno dodatno mapiranje za kategoriju
       categoryId: listing.categoryId,
       price: listing.price,
       attributesList: [], // Ovisno o `Listing`, možda ćete trebati implementirati logiku za mapiranje atributa
     );
-
-    return Product(
-      imageUrl: listing.image ?? 'https://via.placeholder.com/150',
-      name: listing.title,
-      code: listing.id.toString(),
-      catalogNumber: listing.id.toString(),
-      description: listing.title,
-      category: listing.listing_type,
-      categoryId: listing.categoryId,
-      price: listing.price,
-      attributesList: null,
-      listingId: listing.id.toString(),
-
-      // catalogNumber: '', // Ovisno o strukturi `Listing`, možda ćete trebati dodati odgovarajuće polje
-      // description: listing.description ?? 'Opis nije dostupan', // Pretpostavka da `Listing` sadrži `description`
-      // category: null, // Možda će biti potrebno dodatno mapiranje za kategoriju
-      // categoryId: listing.categoryId,
-      // price: listing.price,
-      // attributesList: [], // Ovisno o `Listing`, možda ćete trebati implementirati logiku za mapiranje atributa
-    );
-  }
-
-  Map<String, dynamic> toJsonSavedArticle() {
-    return JsonSavedArticle(
-      listingId: listingId!,
-      price: price,
-    ).toJson();
   }
 }

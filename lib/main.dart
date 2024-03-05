@@ -2,6 +2,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:robiko_shop/product_repository.dart';
 import 'package:robiko_shop/screens/products_screen.dart';
+import 'package:robiko_shop/services/dialog_service.dart';
 import 'package:robiko_shop/upload_file.dart';
 
 import 'firebase_options.dart';
@@ -24,6 +25,7 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return const MaterialApp(
       home: HomePage(),
+      color: Colors.white,
     );
   }
 }
@@ -37,6 +39,31 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   int _selectedIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      try {
+        DialogService().showLoadingDialog(context);
+
+        await ProductRepository().initializeData();
+        Navigator.of(context).pop();
+
+        if (ProductRepository().firebaseUploadedListings.isEmpty) {
+          DialogService().showWarningDialog(
+            context,
+            'Greška',
+            'Dogodila se greška pri učitavanju podataka.',
+          );
+        }
+      } catch (e) {
+        DialogService().showWarningDialog(
+            context, 'Greška', 'Dogodila se greška pri učitavanju podataka.$e');
+      }
+    });
+  }
+
   static const List<Widget> _widgetOptions = <Widget>[
     UploadFile(),
     ProductsScreen(),
@@ -51,6 +78,7 @@ class _HomePageState extends State<HomePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.white,
       appBar: AppBar(
         title: Image.asset('assets/images/logo.png', height: 50),
         backgroundColor: Colors.white,

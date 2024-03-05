@@ -328,4 +328,104 @@ class DialogService {
       },
     );
   }
+
+  void showLoadingDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      // Korisnik ne može da zatvori dijalog klikom izvan njega
+      builder: (BuildContext context) {
+        return const Dialog(
+          child: Padding(
+            padding: EdgeInsets.all(20.0),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircularProgressIndicator(),
+                SizedBox(width: 20),
+                Text("Učitavanje..."),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void showErrorDialog(BuildContext context, String message) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Greška'),
+          content: Text(message),
+          actions: <Widget>[
+            TextButton(
+              child: const Text('OK'),
+              onPressed: () {
+                Navigator.of(context).pop(); // Zatvara AlertDialog
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void showSuccessDialog(
+      BuildContext context, String message, VoidCallback? onConfirm) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Uspjeh'),
+          content: Text(message),
+          actions: <Widget>[
+            TextButton(
+              child: const Text('OK'),
+              onPressed: () {
+                Navigator.of(context).pop(); // Zatvara AlertDialog
+                if (onConfirm != null) {
+                  onConfirm();
+                }
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void showConfirmDialog(BuildContext context, String title, String message,
+      VoidCallback onConfirm) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      // Korisnik ne može da zatvori dijalog klikom izvan njega
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text(title),
+          content: Text(message),
+          actions: <Widget>[
+            TextButton(
+              child: const Text('Ne'),
+              onPressed: () {
+                Navigator.of(context)
+                    .pop(); // Samo zatvara dijalog bez izvođenja akcije
+              },
+            ),
+            TextButton(
+              child: const Text('Da'),
+              onPressed: () {
+                Navigator.of(context).pop(); // Prvo zatvara dijalog
+                onConfirm(); // Zatim izvršava potvrđenu akciju
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
 }

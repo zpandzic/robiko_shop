@@ -1,10 +1,12 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/foundation.dart';
-import 'package:robiko_shop/model/json_saved_article.dart';
+import 'package:robiko_shop/model/firebase_item.dart';
 import 'package:robiko_shop/model/listing.model.dart';
 import 'package:robiko_shop/model/product.model.dart';
 import 'package:robiko_shop/network_service.dart';
+import 'package:robiko_shop/services/firebase_service.dart';
 
 class ProductRepository {
   static final ProductRepository _instance = ProductRepository._internal();
@@ -13,10 +15,44 @@ class ProductRepository {
 
   ProductRepository._internal();
 
+  String? dropdownValue;
+  File? selectedFile;
+
   List<Product> products = [];
   List<Product> readyForPublishList = [];
   List<Product> activeProductList = [];
-  Map<String, JsonSavedArticle> jsonSavedArticles = {};
+
+  //Firebase
+  Map<String, FirebaseItem> firebaseUploadedListings = {};
+  Map<String, FirebaseItem> firebaseAllProducts = {};
+
+  Future<void> setProducts(List<Product> products) async {
+    await initializeData();
+
+    //todo sinkronizacija
+
+    this.products = products;
+  }
+
+  Future<void> initializeData() async {
+    await getUploadedData();
+    await refreshUserListings();
+  }
+
+  Future<void> getUploadedData() async {
+    var getAllData = await FirebaseService().getAllData();
+    firebaseAllProducts = getAllData['productDetails'];
+    firebaseUploadedListings = getAllData['uploadedListings'];
+  }
+
+  Future<bool> refreshUserListings() async {
+    List<Listing> listings = await NetworkService().fetchUserListings();
+
+    activeProductList = listings.map((listing) {
+      return Product.fromListing(listing);
+    }).toList();
+    return true;
+  }
 
   // Method to delete a product by catalog number
   void deleteProduct(String catalogNumber) {
@@ -77,51 +113,45 @@ class ProductRepository {
     }).toList();
   }
 
-  Future<void> initializeData() async {
-    await refreshJson();
-    await refreshUserListings();
-  }
+  List<FirebaseItem> getListToDeleteFromFirebase() {
+    List<FirebaseItem> deleteList = [];
+    Map<String, String> olxIds = {};
 
-  //refresh json
-
-  Future<void> refreshJson() async {
-    jsonSavedArticles = await NetworkService().getKatbrojId();
-  }
-
-
-  Future<bool> refreshUserListings() async {
-    try {
-      var result = await NetworkService().fetchUserListings();
-      List<Listing> listings = result['listings'];
-      Map<String, bool> listingIds = result['listingIds'];
-      activeProductList = listings.map((listing) {
-        return Product.fromListing(listing);
-      }).toList();
-      await syncListings(listingIds);
-      return true;
-    } catch (error) {
-      if (kDebugMode) {
-        print('Error: $error');
-      }
-      return false;
+    if (activeProductList.isEmpty || firebaseUploadedListings.isEmpty) {
+      return [];
     }
-  }
 
-  Future<void> syncListings(Map<String, bool> listingIds) async {
-    List<String> deleteList = [];
+    for (var product in activeProductList) {
+      if (product.listingId != null) {
+        olxIds[product.listingId!] = product.listingId!;
+      }
+    }
 
-    jsonSavedArticles.forEach((key, value) {
-      if (!listingIds.containsKey(value.listingId)) {
-        deleteList.add(key);
+    firebaseUploadedListings.forEach((key, value) {
+      if (!olxIds.containsKey(value.listingId)) {
+        deleteList.add(value);
       }
     });
 
-    if (kDebugMode) {
-      print('Delete list from JSON - not synced: $deleteList');
+    return deleteList;
+  }
+
+  List<String> checkDuplicatesActiveProductList() {
+    Map<String, String> duplicates = {};
+    Map<String, String> names = {};
+
+    for (var product in activeProductList) {
+      if (names.containsKey(product.name)) {
+        duplicates[product.name] = product.listingId!;
+        if (kDebugMode) {
+          print(
+              'product.name: ${product.name} product.listingId: ${product.listingId}');
+        }
+      } else {
+        names[product.name] = product.listingId!;
+      }
     }
 
-    if (deleteList.isNotEmpty) {
-      await NetworkService().deleteListingsFromJson(deleteList);
-    }
+    return duplicates.values.toList();
   }
 }

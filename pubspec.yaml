@@ -39,6 +39,7 @@ dependencies:
   excel: ^3.0.0
   csv: ^5.1.1
   firebase_core: ^2.24.2
+  firebase_database: ^10.4.0
 
 dev_dependencies:
   flutter_test:
@@ -66,7 +67,6 @@ flutter:
   assets:
     - assets/images/logo.png
     - assets/images/
-    - assets/slike/
     # - images/a_dot_ham.jpeg
 
   # An image asset can refer to one or more resolution-specific "variants", see

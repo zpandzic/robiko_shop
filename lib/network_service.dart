@@ -1,15 +1,12 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'package:robiko_shop/model/category_attribute.dart';
-import 'package:robiko_shop/model/json_saved_article.dart';
 import 'package:robiko_shop/model/listing.model.dart';
-import 'package:robiko_shop/model/product.model.dart';
+import 'package:robiko_shop/services/firebase_service.dart';
 
 class NetworkService {
   final String baseUrl = 'https://api.olx.ba';
@@ -22,6 +19,7 @@ class NetworkService {
   // Method to upload a listing
   Future<String> uploadListing(
       Map<String, dynamic> listingData, String catalogNumber) async {
+
     var url = Uri.parse('$baseUrl/listings');
     try {
       var response = await http.post(
@@ -56,10 +54,11 @@ class NetworkService {
   // Method to add an image to a listing
   Future<void> addImage(String id, String catalogNumber) async {
     var url = Uri.parse('$baseUrl/listings/$id/image-upload');
-    String imageName = catalogNumber.replaceAll("/", "\$");
 
-    // Assuming getImageFileFromAssets is a method that retrieves the image file
-    File? imageFile = await getImageFileFromAssets(imageName);
+    File? imageFile = await getImageFileFromUrl(
+      FirebaseService().getImageFromProduct(catalogNumber),
+      id,
+    );
 
     if (imageFile == null) {
       return;
@@ -85,31 +84,37 @@ class NetworkService {
     }
   }
 
-// Helper method to get image file from assets
-  Future<File?> getImageFileFromAssets(String imageName) async {
-    List<String> extensions = [
-      '.jpg',
-      '.png',
-      '.gif',
-      // '.jpeg'
-    ]; // List of possible extensions
-    for (var ext in extensions) {
-      try {
-        final filePath = 'assets/slike/$imageName$ext';
-        final byteData = await rootBundle.load(filePath);
-        final file =
-            File('${(await getTemporaryDirectory()).path}/$imageName$ext');
-        await file.writeAsBytes(
-          byteData.buffer
-              .asUint8List(byteData.offsetInBytes, byteData.lengthInBytes),
-        );
-        return file; // File found and written
-      } catch (e) {
-        // File with this extension not found, try next
-      }
+  Future<File?> getImageFileFromUrl(String? imageUrl, String imageName) async {
+    if (imageUrl == null || imageUrl.isEmpty) {
+      return null;
     }
-    // No file found with any of the extensions
-    return null;
+
+    try {
+      // Preuzmi sliku s URL-a
+      var response = await http.get(Uri.parse(imageUrl));
+      if (response.statusCode == 200) {
+        // Dohvati privremeni direktorij
+        var tempDir = await getTemporaryDirectory();
+        String filePath = '${tempDir.path}/$imageName';
+        File file = File(filePath);
+
+        // Spremi preuzete podatke kao datoteku
+        await file.writeAsBytes(response.bodyBytes);
+        return file;
+      } else {
+        // Neuspješan odgovor
+        if (kDebugMode) {
+          print('Failed to download image: ${response.statusCode}');
+        }
+        return null;
+      }
+    } catch (e) {
+      // Uhvati i obradi iznimke
+      if (kDebugMode) {
+        print('Error in getImageFileFromUrl: $e');
+      }
+      return null;
+    }
   }
 
 // Method to publish a listing
@@ -175,101 +180,9 @@ class NetworkService {
     }
   }
 
-  Future<Map<String, JsonSavedArticle>> getKatbrojId() async {
-    try {
-      Map<String, dynamic> data = await fetchCurrentJson();
-
-      Map<String, JsonSavedArticle> catalogMap = {};
-      data.forEach((key, value) {
-        catalogMap[key] = JsonSavedArticle.fromJson(value);
-      });
-
-      if (kDebugMode) {
-        print('Loaded katbroj_id.json from Firebase Storage');
-      }
-
-      return catalogMap;
-    } catch (e) {
-      if (kDebugMode) {
-        print('Error in getKatbrojId: $e');
-      }
-      return {};
-    }
-  }
-
-  Future<Map<String, dynamic>> fetchCurrentJson() async {
-    FirebaseStorage storage = FirebaseStorage.instance;
-    String downloadURL = await storage.ref('katbroj_id.json').getDownloadURL();
-    var response = await http.get(Uri.parse(downloadURL));
-    return jsonDecode(response.body);
-  }
-
-  Future<bool> modifyAndUploadJson(List<Product> successfulUploads) async {
-    try {
-      // Step 1: Fetch the current JSON from Firebase
-      Map<String, dynamic> currentData = await fetchCurrentJson();
-
-      // Step 2: Merge new data with the fetched JSON
-      for (var product in successfulUploads) {
-        currentData[product.catalogNumber] = product.toJsonSavedArticle();
-      }
-
-      // Step 3: Convert merged data to JSON and upload it back
-      FirebaseStorage storage = FirebaseStorage.instance;
-      var modifiedJson = jsonEncode(currentData);
-      Uint8List bytes = Uint8List.fromList(utf8.encode(modifiedJson));
-
-      await storage.ref('katbroj_id.json').putData(
-            bytes,
-            SettableMetadata(contentType: 'application/json; charset=UTF-8'),
-          );
-
-      if (kDebugMode) {
-        print('Successfully updated and uploaded JSON.');
-      }
-    } catch (e) {
-      if (kDebugMode) {
-        print('Error in modifyAndUploadJson: $e');
-      }
-      return false;
-    }
-    return true;
-  }
-
-  Future<bool> deleteListingsFromJson(List<String> deleteList) async {
-    try {
-      // Step 1: Fetch the current JSON from Firebase
-      Map<String, dynamic> currentData = await fetchCurrentJson();
-
-      // Step 2: Remove listings from the fetched JSON
-      for (var catalogNumber in deleteList) {
-        currentData.remove(catalogNumber);
-      }
-
-      // Step 3: Convert updated data to JSON and upload it back
-      FirebaseStorage storage = FirebaseStorage.instance;
-      var encoder = const JsonEncoder.withIndent('  ');
-      var modifiedJson = encoder.convert(currentData);
-      Uint8List bytes = Uint8List.fromList(modifiedJson.codeUnits);
-      await storage.ref('katbroj_id.json').putData(bytes);
-
-      if (kDebugMode) {
-        print('Successfully updated and uploaded JSON. Deleted: $deleteList');
-      }
-
-      return true;
-    } catch (e) {
-      if (kDebugMode) {
-        print('Error in deleteListingsFromJson: $e');
-      }
-      return false;
-    }
-  }
-
-  Future<Map<String, dynamic>> fetchUserListings() async {
+  Future<List<Listing>> fetchUserListings() async {
     // var url = Uri.parse('https://api.olx.ba/users/RobikoShop/listings');
     List<Listing> listings = [];
-    Map<String, bool> listingIds = {};
     int currentPage = 1;
     bool hasMore = true;
 
@@ -290,7 +203,6 @@ class NetworkService {
             for (var item in data['data']) {
               Listing listing = Listing.fromJson(item);
               listings.add(listing);
-              listingIds[listing.id.toString()] = true;
               if (kDebugMode) {
                 // print(listing);
               } // Print each listing object
@@ -308,10 +220,7 @@ class NetworkService {
                 'Failed to load listings. Status code: ${response.statusCode}');
           }
           hasMore = false;
-          return {
-            'listings': [],
-            'listingIds': [],
-          };
+          return [];
         }
       } catch (e) {
         // Handle any errors that occur during the request
@@ -319,17 +228,11 @@ class NetworkService {
           print('Error: $e');
         }
         hasMore = false;
-        return {
-          'listings': [],
-          'listingIds': [],
-        };
+        return [];
       }
     }
 
-    return {
-      'listings': listings,
-      'listingIds': listingIds,
-    };
+    return listings;
   }
 
   Future<Map<String, dynamic>> fetchListingRefreshLimits() async {
@@ -346,12 +249,16 @@ class NetworkService {
       if (response.statusCode == 200) {
         return json.decode(response.body);
       } else {
-        print(
-            'Failed to fetch listing refresh limits: ${response.statusCode}, ${response.body}');
+        if (kDebugMode) {
+          print(
+              'Failed to fetch listing refresh limits: ${response.statusCode}, ${response.body}');
+        }
         return {};
       }
     } catch (e) {
-      print('Error in fetchListingRefreshLimits: $e');
+      if (kDebugMode) {
+        print('Error in fetchListingRefreshLimits: $e');
+      }
       return {};
     }
   }
@@ -367,17 +274,23 @@ class NetworkService {
         },
       );
 
-      print(response);
+      if (kDebugMode) {
+        print(response);
+      }
 
       if (response.statusCode == 200) {
         return json.decode(response.body);
       } else {
-        print(
-            'Failed to fetch listing limits: ${response.statusCode}, ${response.body}');
+        if (kDebugMode) {
+          print(
+              'Failed to fetch listing limits: ${response.statusCode}, ${response.body}');
+        }
         return {};
       }
     } catch (e) {
-      print('Error in fetchListingLimits: $e');
+      if (kDebugMode) {
+        print('Error in fetchListingLimits: $e');
+      }
       return {};
     }
   }
@@ -396,13 +309,51 @@ class NetworkService {
       if (response.statusCode == 200) {
         return json.decode(response.body)['message'];
       } else {
-        print(
-            'Failed to refresh listing: ${response.statusCode}, ${response.body}');
+        if (kDebugMode) {
+          print(
+              'Failed to refresh listing: ${response.statusCode}, ${response.body}');
+        }
         return 'Failed to refresh listing.';
       }
     } catch (e) {
-      print('Error in refreshListing: $e');
+      if (kDebugMode) {
+        print('Error in refreshListing: $e');
+      }
       return 'Error occurred while refreshing listing.';
+    }
+  }
+
+  Future<void> deleteListing(String listingId) async {
+    var url = Uri.parse('$baseUrl/listings/$listingId');
+    try {
+      var response = await http.delete(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': authorizationToken,
+        },
+      );
+
+      if (response.statusCode == 200) {
+        if (kDebugMode) {
+          print('Listing successfully deleted: $listingId');
+        }
+      } else {
+        throw Exception(
+          'Failed to delete listing: ${response.statusCode}, ${response.body}',
+        );
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error in deleteListing: $e');
+      }
+      rethrow;
+    }
+  }
+
+  void deleteDuplicates(List<String> duplicates) {
+    for (var listingId in duplicates) {
+      deleteListing(listingId);
     }
   }
 }

@@ -43,7 +43,7 @@ class _UploadProgressDialogState extends State<UploadProgressDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('Uploading Products'),
+      title: const Text('Objavljivanje proizvoda'),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
