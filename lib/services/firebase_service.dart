@@ -29,7 +29,6 @@
 
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_database/firebase_database.dart';
-import 'package:flutter/foundation.dart';
 import 'package:robiko_shop/model/firebase_item.dart';
 import 'package:robiko_shop/model/product.model.dart';
 import 'package:robiko_shop/product_repository.dart';
@@ -60,9 +59,7 @@ class FirebaseService {
 
   // Future<void> addData(String path, Map<String, dynamic> data) async {
   //   await database.ref(path).set(data);
-  //   if (kDebugMode) {
   //     print('Transaction committed.');
-  //   }
   // }
 
   String? getImageFromProduct(String catalogNumber) {
@@ -113,9 +110,9 @@ class FirebaseService {
     }
 
     // Izvrši sve ažuriranja u jednom pozivu
-    if (updates.isNotEmpty) {
-      await database.ref().update(updates);
-    }
+    // if (updates.isNotEmpty) {
+    //   await database.ref().update(updates);
+    // }
   }
 
   Future<void> deleteProducts(List<FirebaseItem> products) async {
@@ -127,13 +124,10 @@ class FirebaseService {
     }
 
     await database.ref().update(updates).then((_) {
-      if (kDebugMode) {
-        print('All selected products successfully deleted.');
-      }
+      print('All selected products successfully deleted.');
     }).catchError((error) {
-      if (kDebugMode) {
-        print('Error deleting products: $error');
-      }
+      print('Error deleting products: $error');
+
       throw Exception('Failed to delete selected products');
     });
   }

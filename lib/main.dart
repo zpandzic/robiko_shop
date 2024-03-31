@@ -1,21 +1,184 @@
+import 'dart:async';
+
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
+import 'package:robiko_shop/firebase_options.dart';
+import 'package:robiko_shop/model/product.model.dart';
 import 'package:robiko_shop/product_repository.dart';
 import 'package:robiko_shop/screens/products_screen.dart';
 import 'package:robiko_shop/services/dialog_service.dart';
+import 'package:robiko_shop/services/firebase_service.dart';
 import 'package:robiko_shop/upload_file.dart';
-
-import 'firebase_options.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
-
   await ProductRepository().initializeData();
-
+  await initializeService();
   runApp(const MyApp());
+}
+
+Future<void> initializeService() async {
+  // final service = FlutterBackgroundService();
+  //
+  // await service.configure(
+  //   androidConfiguration: AndroidConfiguration(
+  //     onStart: onStart,
+  //     autoStart: false,
+  //     isForegroundMode: false,
+  //   ),
+  //   iosConfiguration: IosConfiguration(),
+  // );
+}
+
+// @pragma('vm:entry-point')
+// void onStart(ServiceInstance service) async {
+//   print('Service started');
+//   DartPluginRegistrant.ensureInitialized();
+//   await Firebase.initializeApp(
+//     options: DefaultFirebaseOptions.currentPlatform,
+//   );
+//   await ProductRepository().getUploadedData();
+//
+//   SharedPreferences preferences = await SharedPreferences.getInstance();
+//
+//   if (service is AndroidServiceInstance) {
+//     service.on('setAsForeground').listen((event) {
+//       service.setAsForegroundService();
+//     });
+//
+//     service.on('setAsBackground').listen((event) {
+//       service.setAsBackgroundService();
+//     });
+//   }
+//
+//   service.on('stopService').listen((event) {
+//     preferences.clear();
+//     service.stopSelf();
+//   });
+//
+//   handleUploadProducts(service);
+// }
+
+// void handleUploadProducts(ServiceInstance service) async {
+//   SharedPreferences preferences = await SharedPreferences.getInstance();
+//   String? productsJsonString = await preferences.getString("productsForUpload");
+//   List<Product> productsForUpload = [];
+//   if (productsJsonString != null) {
+//     productsForUpload = List<Product>.from(json
+//         .decode(productsJsonString)
+//         .map((model) => Product.fromJson(model)));
+//     print(productsForUpload);
+//   }
+//
+//   try {
+//     var successfulUploads = await uploadListings(productsForUpload, service);
+//     // ProductRepository().removeUploadedProducts(successfulUploads);
+//     // DialogService().showLoadingDialog(context);
+//
+//     // await ProductRepository().refreshUserListings().then(
+//     //       (value) => setState(() {
+//     //         ProductRepository().removeUploadedProducts(successfulUploads);
+//     //       }),
+//     //     );
+//
+//     // Navigator.of(context).pop();
+//
+//       print(jsonEncode(successfulUploads));
+//   } catch (e) {
+//       print(e);
+//   }
+//
+//   preferences.clear();
+//
+//     print('service.stopSelf();');
+//   service.stopSelf();
+// }
+//
+// Future<List<Product>> uploadListings(List<Product> productsForUpload,
+//     ServiceInstance service,) async {
+//   bool isUploadCancelled = false;
+//   List<Product> successfulUploads = [];
+//   List<Product> firebaseList = [];
+//
+//   int totalProducts = productsForUpload.length;
+//   int failedUploads = 0;
+//   bool limitReached = false;
+//   String? nextPublishTime;
+//
+//   for (int currentIndex = 0;
+//   currentIndex < productsForUpload.length;
+//   currentIndex++) {
+//     limitReached = false;
+//
+//     Product product = productsForUpload[currentIndex];
+//
+//     if (isUploadCancelled == true) {
+//       break;
+//     }
+//
+//     try {
+//       String listingId = await NetworkService()
+//           .uploadListing(product.toListing(), product.catalogNumber);
+//       product.listingId = listingId;
+//
+//       await Future.delayed(const Duration(milliseconds: 50));
+//
+//       successfulUploads.add(product);
+//       firebaseList.add(product);
+//     } catch (e) {
+//       if (true) {
+//         limitReached = true; //provjeriti response
+//         currentIndex--;
+//       } else {
+//         failedUploads++;
+//       }
+//     }
+//
+//     if (firebaseList.length >= 10) {
+//       firebaseUploadListings(firebaseList);
+//     }
+//
+//     if (limitReached == true) {
+//       var time = DateTime.now().add(const Duration(minutes: 30));
+//       nextPublishTime =
+//       "${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(
+//           2, '0')}";
+//     } else {
+//       nextPublishTime = null;
+//     }
+//
+//     service.invoke('update', {
+//       "successfulUploads": successfulUploads.length,
+//       "failedUploads": failedUploads,
+//       "totalProducts": totalProducts,
+//       "limitReached": limitReached,
+//       "nextPublishTime": nextPublishTime
+//     });
+//
+//     if (limitReached) {
+//       await Future.delayed(const Duration(seconds: 1));
+//       limitReached = false;
+//     }
+//   }
+//
+//   firebaseUploadListings(firebaseList);
+//
+//   return successfulUploads;
+// }
+
+Future<void> firebaseUploadListings(List<Product> firebaseList) async {
+  // return;
+  if (firebaseList.isNotEmpty) {
+    try {
+      await FirebaseService().addProducts(firebaseList);
+      firebaseList.clear();
+    } catch (e) {
+      print(e);
+    }
+  }
 }
 
 class MyApp extends StatelessWidget {
@@ -41,16 +204,22 @@ class _HomePageState extends State<HomePage> {
   int _selectedIndex = 0;
 
   @override
+  void dispose() {
+    super.dispose();
+  }
+
+  @override
   void initState() {
     super.initState();
+
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       try {
         DialogService().showLoadingDialog(context);
 
         await ProductRepository().initializeData();
-        Navigator.of(context).pop();
+        if (mounted) Navigator.of(context).pop();
 
-        if (ProductRepository().firebaseUploadedListings.isEmpty) {
+        if (ProductRepository().firebaseUploadedListings.isEmpty && mounted) {
           DialogService().showWarningDialog(
             context,
             'Greška',
@@ -58,8 +227,10 @@ class _HomePageState extends State<HomePage> {
           );
         }
       } catch (e) {
-        DialogService().showWarningDialog(
-            context, 'Greška', 'Dogodila se greška pri učitavanju podataka.$e');
+        if (mounted) {
+          DialogService().showWarningDialog(context, 'Greška',
+              'Dogodila se greška pri učitavanju podataka.$e');
+        }
       }
     });
   }

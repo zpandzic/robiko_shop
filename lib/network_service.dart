@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'package:robiko_shop/model/category_attribute.dart';
@@ -19,7 +18,6 @@ class NetworkService {
   // Method to upload a listing
   Future<String> uploadListing(
       Map<String, dynamic> listingData, String catalogNumber) async {
-
     var url = Uri.parse('$baseUrl/listings');
     try {
       var response = await http.post(
@@ -44,9 +42,8 @@ class NetworkService {
         );
       }
     } catch (e) {
-      if (kDebugMode) {
-        print('Error in uploadListing: $e');
-      }
+      print('Error in uploadListing: $e');
+
       rethrow;
     }
   }
@@ -77,9 +74,7 @@ class NetworkService {
       await http.Response.fromStream(streamedResponse);
       return;
     } catch (e) {
-      if (kDebugMode) {
-        print('Error in addImage: $e');
-      }
+      print('Error in addImage: $e');
       rethrow;
     }
   }
@@ -103,16 +98,12 @@ class NetworkService {
         return file;
       } else {
         // Neuspješan odgovor
-        if (kDebugMode) {
-          print('Failed to download image: ${response.statusCode}');
-        }
+        print('Failed to download image: ${response.statusCode}');
         return null;
       }
     } catch (e) {
       // Uhvati i obradi iznimke
-      if (kDebugMode) {
-        print('Error in getImageFileFromUrl: $e');
-      }
+      print('Error in getImageFileFromUrl: $e');
       return null;
     }
   }
@@ -129,15 +120,12 @@ class NetworkService {
         },
       );
 
-      if (kDebugMode) {
-        print('Listing published: ${response.body}');
-      }
+      print('Listing published: ${response.body}');
 
       return response;
     } catch (e) {
-      if (kDebugMode) {
-        print('Error in publishListing: $e');
-      }
+      print('Error in publishListing: $e');
+
       rethrow;
     }
   }
@@ -157,9 +145,8 @@ class NetworkService {
         throw Exception('Failed to load categories');
       }
     } catch (e) {
-      if (kDebugMode) {
-        print('Error in fetchCategories: $e');
-      }
+      print('Error in fetchCategories: $e');
+
       rethrow;
     }
   }
@@ -203,9 +190,7 @@ class NetworkService {
             for (var item in data['data']) {
               Listing listing = Listing.fromJson(item);
               listings.add(listing);
-              if (kDebugMode) {
-                // print(listing);
-              } // Print each listing object
+              // Print each listing object
             }
           }
           // return listings;
@@ -215,18 +200,17 @@ class NetworkService {
           currentPage++;
         } else {
           // Handle the case where the server does not return a 200 OK response
-          if (kDebugMode) {
-            print(
-                'Failed to load listings. Status code: ${response.statusCode}');
-          }
+
+          print('Failed to load listings. Status code: ${response.statusCode}');
+
           hasMore = false;
           return [];
         }
       } catch (e) {
         // Handle any errors that occur during the request
-        if (kDebugMode) {
-          print('Error: $e');
-        }
+
+        print('Error: $e');
+
         hasMore = false;
         return [];
       }
@@ -249,16 +233,14 @@ class NetworkService {
       if (response.statusCode == 200) {
         return json.decode(response.body);
       } else {
-        if (kDebugMode) {
-          print(
-              'Failed to fetch listing refresh limits: ${response.statusCode}, ${response.body}');
-        }
+        print(
+            'Failed to fetch listing refresh limits: ${response.statusCode}, ${response.body}');
+
         return {};
       }
     } catch (e) {
-      if (kDebugMode) {
-        print('Error in fetchListingRefreshLimits: $e');
-      }
+      print('Error in fetchListingRefreshLimits: $e');
+
       return {};
     }
   }
@@ -274,23 +256,17 @@ class NetworkService {
         },
       );
 
-      if (kDebugMode) {
-        print(response);
-      }
+      print(response);
 
       if (response.statusCode == 200) {
         return json.decode(response.body);
       } else {
-        if (kDebugMode) {
-          print(
-              'Failed to fetch listing limits: ${response.statusCode}, ${response.body}');
-        }
+        print(
+            'Failed to fetch listing limits: ${response.statusCode}, ${response.body}');
         return {};
       }
     } catch (e) {
-      if (kDebugMode) {
-        print('Error in fetchListingLimits: $e');
-      }
+      print('Error in fetchListingLimits: $e');
       return {};
     }
   }
@@ -309,16 +285,12 @@ class NetworkService {
       if (response.statusCode == 200) {
         return json.decode(response.body)['message'];
       } else {
-        if (kDebugMode) {
-          print(
-              'Failed to refresh listing: ${response.statusCode}, ${response.body}');
-        }
+        print(
+            'Failed to refresh listing: ${response.statusCode}, ${response.body}');
         return 'Failed to refresh listing.';
       }
     } catch (e) {
-      if (kDebugMode) {
-        print('Error in refreshListing: $e');
-      }
+      print('Error in refreshListing: $e');
       return 'Error occurred while refreshing listing.';
     }
   }
@@ -335,18 +307,14 @@ class NetworkService {
       );
 
       if (response.statusCode == 200) {
-        if (kDebugMode) {
-          print('Listing successfully deleted: $listingId');
-        }
+        print('Listing successfully deleted: $listingId');
       } else {
         throw Exception(
           'Failed to delete listing: ${response.statusCode}, ${response.body}',
         );
       }
     } catch (e) {
-      if (kDebugMode) {
-        print('Error in deleteListing: $e');
-      }
+      print('Error in deleteListing: $e');
       rethrow;
     }
   }

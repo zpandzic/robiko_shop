@@ -1,43 +1,56 @@
 import 'package:flutter/material.dart';
 
+// class UploadProgressDialog extends StatelessWidget {
+//   final int successfulUploads;
+//   final int failedUploads;
+//   final int totalProducts;
+//   final String? nextPublishTime;
+//   final VoidCallback onCancel;
+//
+//   const UploadProgressDialog({
+//     Key? key,
+//     required this.successfulUploads,
+//     required this.failedUploads,
+//     required this.totalProducts,
+//     this.nextPublishTime,
+//     required this.onCancel,
+//   }) : super(key: key);
 class UploadProgressDialog extends StatefulWidget {
-  final int totalProducts;
-  final void Function(void Function(int, bool)) onUploadProgress;
-  final void Function(void Function()) onCancel;
+  final void Function(void Function(int, int, int, String?)) onUploadProgress;
+
+  final VoidCallback onCancel;
 
   const UploadProgressDialog({
     Key? key,
-    required this.totalProducts,
     required this.onUploadProgress,
     required this.onCancel,
   }) : super(key: key);
 
   @override
-  // ignore: library_private_types_in_public_api
-  _UploadProgressDialogState createState() => _UploadProgressDialogState();
+  UploadProgressDialogState createState() => UploadProgressDialogState();
 }
 
-class _UploadProgressDialogState extends State<UploadProgressDialog> {
-  int currentProductIndex = 0;
-  int successfulUploads = 0;
-  int failedUploads = 0;
+class UploadProgressDialogState extends State<UploadProgressDialog> {
+  int _successfulUploads = 0;
+  int _failedUploads = 0;
+  int _totalProducts = 0;
+  String? _nextPublishTime;
 
-  void updateProgress(int index, bool isSuccess) {
+  void _updateCounts(
+      int successful, int failed, int totalProducts, String? nextPublishTime) {
+    if (mounted == false) return;
     setState(() {
-      currentProductIndex = index;
-      if (isSuccess) {
-        successfulUploads++;
-      } else {
-        failedUploads++;
-      }
+      _successfulUploads = successful;
+      _failedUploads = failed;
+      _totalProducts = totalProducts;
+      _nextPublishTime = nextPublishTime;
     });
   }
 
   @override
   void initState() {
     super.initState();
-    // Invoke the callback with the updateProgress function
-    widget.onUploadProgress(updateProgress);
+    widget.onUploadProgress(_updateCounts);
   }
 
   @override
@@ -46,25 +59,37 @@ class _UploadProgressDialogState extends State<UploadProgressDialog> {
       title: const Text('Objavljivanje proizvoda'),
       content: Column(
         mainAxisSize: MainAxisSize.min,
-        children: [
-          LinearProgressIndicator(
-            value: currentProductIndex / widget.totalProducts,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Column(
+            children: [
+              LinearProgressIndicator(
+                  value: (_successfulUploads + _failedUploads) /
+                      (_totalProducts == 0 ? 1 : _totalProducts)),
+              const SizedBox(height: 8),
+              Text(
+                '${_totalProducts == (_successfulUploads + _failedUploads) ? 'Objavljivanje završeno' : 'U tijeku'} ${_successfulUploads + _failedUploads} od ${_totalProducts}',
+              ),
+              if (_nextPublishTime != null)
+                Text(
+                  'Objavljivanje je zaustavljeno do $_nextPublishTime',
+                )
+            ],
           ),
-          const SizedBox(height: 20),
+          SizedBox(height: 20),
+          Text('Uspješno: $_successfulUploads'),
           Text(
-              'Uploading product $currentProductIndex of ${widget.totalProducts}'),
-          Text('Successful uploads: $successfulUploads'),
-          Text('Failed uploads: $failedUploads'),
+            'Neuspješno: $_failedUploads',
+            style: const TextStyle(color: Colors.red),
+          ),
         ],
       ),
       actions: <Widget>[
         TextButton(
-          onPressed: () => {
-            widget.onCancel((){
-              Navigator.of(context).pop();
-            }),
+          onPressed: () {
+            widget.onCancel();
           },
-          child: const Text('Cancel'),
+          child: Text('Zaustavi objavljivanje'),
         ),
       ],
     );

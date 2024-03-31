@@ -1,9 +1,7 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:robiko_shop/Widgets/product_widget.dart';
 import 'package:robiko_shop/attribute_helper.dart';
-import 'package:robiko_shop/dialogs/upload_progress_dialog.dart';
 import 'package:robiko_shop/model/product.model.dart';
 import 'package:robiko_shop/network_service.dart';
 import 'package:robiko_shop/product_repository.dart';
@@ -83,6 +81,8 @@ class ProductsListWidgetState extends State<ProductsListWidget> {
     super.dispose();
   }
 
+
+
   void _filterProducts() {
     setState(() {
       filteredProducts = widget.productList.where((product) {
@@ -155,16 +155,20 @@ class ProductsListWidgetState extends State<ProductsListWidget> {
   }
 
   void _deleteSelectedProducts() {
-    setState(() {
-      widget.productList
-          .removeWhere((product) => selectedProducts[getID(product)] ?? false);
-      selectedProducts.clear();
+    dialogService.showConfirmDialog(
+        context, 'Brisanje', 'Jeste li sigurni da želite obrisati proizvode?',
+        () {
+      setState(() {
+        widget.productList.removeWhere(
+            (product) => selectedProducts[getID(product)] ?? false);
+        selectedProducts.clear();
 
-      for (var product in widget.productList) {
-        selectedProducts[getID(product)] = false;
-      }
+        for (var product in widget.productList) {
+          selectedProducts[getID(product)] = false;
+        }
 
-      widget.refreshState();
+        widget.refreshState();
+      });
     });
   }
 
@@ -197,50 +201,50 @@ class ProductsListWidgetState extends State<ProductsListWidget> {
 
     void Function(int, bool)? updateProgress;
 
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (BuildContext context) {
-        return UploadProgressDialog(
-          totalProducts: totalProducts,
-          onUploadProgress: (update) {
-            updateProgress = update;
-          },
-          onCancel: (callback) {
-            if (!isRefreshInProgress) {
-              Navigator.of(context).pop();
-              return;
-            }
-            showDialog(
-              context: context,
-              builder: (BuildContext context) {
-                return AlertDialog(
-                  title: const Text('Prekid'),
-                  content: const Text(
-                      'Jeste li sigurni da želite prekinuti osvježavanje?'),
-                  actions: <Widget>[
-                    TextButton(
-                      onPressed: () {
-                        Navigator.of(context).pop();
-                      },
-                      child: const Text('Ne'),
-                    ),
-                    TextButton(
-                      onPressed: () {
-                        Navigator.of(context).pop();
-                        callback();
-                        isRefreshCancelled = true;
-                      },
-                      child: const Text('Da'),
-                    ),
-                  ],
-                );
-              },
-            );
-          },
-        );
-      },
-    );
+    // showDialog(
+    //   context: context,
+    //   barrierDismissible: false,
+    //   builder: (BuildContext context) {
+    //     return UploadProgressDialog(
+    //       totalProducts: totalProducts,
+    //       onUploadProgress: (update) {
+    //         updateProgress = update;
+    //       },
+    //       onCancel: (callback) {
+    //         if (!isRefreshInProgress) {
+    //           Navigator.of(context).pop();
+    //           return;
+    //         }
+    //         showDialog(
+    //           context: context,
+    //           builder: (BuildContext context) {
+    //             return AlertDialog(
+    //               title: const Text('Prekid'),
+    //               content: const Text(
+    //                   'Jeste li sigurni da želite prekinuti osvježavanje?'),
+    //               actions: <Widget>[
+    //                 TextButton(
+    //                   onPressed: () {
+    //                     Navigator.of(context).pop();
+    //                   },
+    //                   child: const Text('Ne'),
+    //                 ),
+    //                 TextButton(
+    //                   onPressed: () {
+    //                     Navigator.of(context).pop();
+    //                     callback();
+    //                     isRefreshCancelled = true;
+    //                   },
+    //                   child: const Text('Da'),
+    //                 ),
+    //               ],
+    //             );
+    //           },
+    //         );
+    //       },
+    //     );
+    //   },
+    // );
 
     for (var product in productsToRefresh) {
       currentIndex++;
@@ -250,13 +254,9 @@ class ProductsListWidgetState extends State<ProductsListWidget> {
         // Logika za osvježavanje proizvoda
         await networkService.refreshListing(product.listingId!);
         successfulRefreshes++;
-        updateProgress?.call(currentIndex, true);
       } catch (e) {
         failedRefreshes++;
-        updateProgress?.call(currentIndex, false);
-        if (kDebugMode) {
-          print("Greška pri osvježavanju proizvoda: $e");
-        }
+        print("Greška pri osvježavanju proizvoda: $e");
       }
     }
 
@@ -303,24 +303,6 @@ class ProductsListWidgetState extends State<ProductsListWidget> {
         return SafeArea(
           child: Wrap(
             children: <Widget>[
-              if (widget.obrisi == true)
-                ListTile(
-                  leading: const Icon(Icons.delete),
-                  title: const Text('Obriši odabrane artikle'),
-                  onTap: () {
-                    Navigator.pop(context);
-                    _deleteSelectedProducts();
-                  },
-                ),
-              if (widget.postaviKategoriju == true)
-                ListTile(
-                  leading: const Icon(Icons.category),
-                  title: const Text('Postavi kategoriju za odabrane artikle'),
-                  onTap: () {
-                    Navigator.pop(context);
-                    _setCategoryForSelectedProducts();
-                  },
-                ),
               widget.objavi != null
                   ? ListTile(
                       leading: const Icon(Icons.warning),
@@ -331,6 +313,15 @@ class ProductsListWidgetState extends State<ProductsListWidget> {
                       },
                     )
                   : const SizedBox(),
+              if (widget.postaviKategoriju == true)
+                ListTile(
+                  leading: const Icon(Icons.category),
+                  title: const Text('Postavi kategoriju za odabrane artikle'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    _setCategoryForSelectedProducts();
+                  },
+                ),
               if (widget.aktivni == true)
                 ListTile(
                   leading: const Icon(Icons.cancel),
@@ -338,7 +329,16 @@ class ProductsListWidgetState extends State<ProductsListWidget> {
                   onTap: () {
                     checkLimitsAndRefreshProducts();
                   },
-                )
+                ),
+              if (widget.obrisi == true)
+                ListTile(
+                  leading: const Icon(Icons.delete),
+                  title: const Text('Obriši odabrane artikle'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    _deleteSelectedProducts();
+                  },
+                ),
             ],
           ),
         );

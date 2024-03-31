@@ -118,10 +118,12 @@ class _UploadFileState extends State<UploadFile>
           NetworkService().deleteDuplicates(duplicates);
           DialogService().showLoadingDialog(context);
           await ProductRepository().initializeData();
-          Navigator.of(context).pop();
+          if (mounted) Navigator.of(context).pop();
         } catch (error) {
-          Navigator.of(context).pop();
-          DialogService().showErrorDialog(context, error.toString());
+          if (mounted) {
+            Navigator.of(context).pop();
+            DialogService().showErrorDialog(context, error.toString());
+          }
         }
         syncFunction();
       });
@@ -135,20 +137,22 @@ class _UploadFileState extends State<UploadFile>
     FilePickerResult? result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['csv'],
+      allowMultiple: false,
     );
 
-    if (result != null) {
-      final filePath = result.files.single.path!;
-      if (kDebugMode) {
-        print(filePath);
-      }
+    if (result != null && result.files.isNotEmpty) {
       setState(() {
-        ProductRepository().selectedFile = File(filePath);
+        // if platform is web
+        if (kIsWeb) {
+          ProductRepository().selectedFile =
+              File.fromRawPath(result.files.first.bytes!);
+        } else {
+          final filePath = result.files.single.path!;
+          ProductRepository().selectedFile = File(filePath);
+        }
       });
     } else {
-      if (kDebugMode) {
-        print('No file selected');
-      }
+      print('No file selected');
     }
   }
 
@@ -161,14 +165,19 @@ class _UploadFileState extends State<UploadFile>
             ProductRepository().dropdownValue!);
 
         await ProductRepository().setProducts(products);
-        Navigator.of(context).pop();
+        if (mounted) {
+          Navigator.of(context).pop();
 
-        DialogService().showSuccessDialog(
-            context, 'Uspješno učitano ${products.length} proizvod/a', null);
+          DialogService().showSuccessDialog(
+              context, 'Uspješno učitano ${products.length} proizvod/a', null);
+        }
       } catch (error) {
-        Navigator.of(context).pop();
-
-        DialogService().showErrorDialog(context, error.toString());
+        print(error);
+        if (mounted) {
+          Navigator.of(context).pop();
+          DialogService().showErrorDialog(context, error.toString());
+        }
+        rethrow;
       }
     }
   }
@@ -216,6 +225,7 @@ class _UploadFileState extends State<UploadFile>
             onPressed: checkDuplicates,
             child: const Text('Sinkroniziraj proizvode'),
           ),
+          // const PublishingWidget(),
           // ElevatedButton(
           //   onPressed: checkactiveimages,
           //   child: const Text('provjeri slike aktivnih'),

@@ -1,7 +1,7 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:flutter/foundation.dart';
 import 'package:robiko_shop/model/firebase_item.dart';
 import 'package:robiko_shop/model/listing.model.dart';
 import 'package:robiko_shop/model/product.model.dart';
@@ -11,9 +11,9 @@ import 'package:robiko_shop/services/firebase_service.dart';
 class ProductRepository {
   static final ProductRepository _instance = ProductRepository._internal();
 
-  factory ProductRepository() => _instance;
-
   ProductRepository._internal();
+
+  factory ProductRepository() => _instance;
 
   String? dropdownValue;
   File? selectedFile;
@@ -32,11 +32,12 @@ class ProductRepository {
     //todo sinkronizacija
 
     this.products = products;
+    readyForPublishList = [];
   }
 
   Future<void> initializeData() async {
     await getUploadedData();
-    await refreshUserListings();
+    // await refreshUserListings();
   }
 
   Future<void> getUploadedData() async {
@@ -82,9 +83,8 @@ class ProductRepository {
         const JsonEncoder.withIndent('  '); // Two-space indentation
     String prettyPrint =
         encoder.convert(products.map((e) => e.toJson()).toList());
-    if (kDebugMode) {
-      print(prettyPrint);
-    }
+
+    print(prettyPrint);
   }
 
   void moveProductsToReadyForPublishList(List<Product> productsToUpdate) {
@@ -143,10 +143,8 @@ class ProductRepository {
     for (var product in activeProductList) {
       if (names.containsKey(product.name)) {
         duplicates[product.name] = product.listingId!;
-        if (kDebugMode) {
-          print(
-              'product.name: ${product.name} product.listingId: ${product.listingId}');
-        }
+        print(
+            'product.name: ${product.name} product.listingId: ${product.listingId}');
       } else {
         names[product.name] = product.listingId!;
       }

@@ -78,6 +78,25 @@ class Product {
     });
   }
 
+  static Product fromJson(Map<String, dynamic> json) {
+    return Product(
+      imageUrl: json['imageUrl'],
+      name: json['name'],
+      code: json['code'],
+      catalogNumber: json['catalogNumber'],
+      description: json['description'],
+      category: json['category'],
+      categoryId: json['categoryId'],
+      price: json['price']?.toDouble() ?? 0.0,
+      // Pretpostavka ukoliko je price tipa String u JSON-u
+      attributesList: json['attributesList'] != null
+          ? List<AttributeValue>.from(
+              json['attributesList'].map((x) => AttributeValue.fromJson(x)))
+          : null,
+      listingId: json['listingId'],
+    );
+  }
+
   Map<String, dynamic> toJson() {
     return {
       'imageUrl': imageUrl,

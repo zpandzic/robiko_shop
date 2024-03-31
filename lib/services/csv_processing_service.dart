@@ -1,23 +1,37 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:robiko_shop/model/nuic_csv.dart';
 import 'package:robiko_shop/model/product.model.dart';
 import 'package:robiko_shop/model/visokaZaliheData.model.dart';
 
 class CsvProcessingService {
   Future<List<Product>> processCsv(File file, String csvType) async {
-    final input = file.openRead();
-
     List<List<dynamic>> rows = [];
 
-    Stream<List> csvStream = input
-        .transform(utf8.decoder)
-        .transform(const LineSplitter())
-        .map((line) => line.split(';'));
+    if (kIsWeb) {
+      // var rowsAsListOfValues = const CsvToListConverter(
+      //   fieldDelimiter: ';',
+      // ).convert(file.path);
 
-    await for (List<dynamic> row in csvStream) {
-      rows.add(row);
+      List<String> rowsSA = const LineSplitter().convert(file.path);
+      List<List<dynamic>> rowsAsListOfValues =
+          rowsSA.map((e) => e.split(';')).toList();
+      for (var row in rowsAsListOfValues) {
+        rows.add(row);
+      }
+    } else {
+      final input = file.openRead();
+
+      Stream<List> csvStream = input
+          .transform(utf8.decoder)
+          .transform(const LineSplitter())
+          .map((line) => line.split(';'));
+
+      await for (List<dynamic> row in csvStream) {
+        rows.add(row);
+      }
     }
 
     // var j = 0;

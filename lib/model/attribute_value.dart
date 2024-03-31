@@ -10,4 +10,9 @@ class AttributeValue {
       'value': value,
     };
   }
+
+  static AttributeValue fromJson(Map<String, dynamic> json) => AttributeValue(
+        id: json['id'],
+        value: json['value'],
+      );
 }
