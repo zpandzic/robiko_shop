@@ -1,8 +1,8 @@
 import 'dart:convert';
-import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
-import 'package:path_provider/path_provider.dart';
+import 'package:robiko_shop/exceptions/hourly_limit_exceeded_exception.dart';
 import 'package:robiko_shop/model/category_attribute.dart';
 import 'package:robiko_shop/model/listing.model.dart';
 import 'package:robiko_shop/services/firebase_service.dart';
@@ -36,6 +36,10 @@ class NetworkService {
         await publishListing(listingId);
 
         return listingId;
+      } else if (response.statusCode == 400 &&
+          response.body
+              .contains("Prekoracili ste limit objave oglasa po satu!")) {
+        throw HourlyLimitExceededException();
       } else {
         throw Exception(
           'Failed to upload listing : ${response.statusCode}, ${response.body}',
@@ -52,7 +56,7 @@ class NetworkService {
   Future<void> addImage(String id, String catalogNumber) async {
     var url = Uri.parse('$baseUrl/listings/$id/image-upload');
 
-    File? imageFile = await getImageFileFromUrl(
+    Uint8List? imageFile = await getImageFileFromUrl(
       FirebaseService().getImageFromProduct(catalogNumber),
       id,
     );
@@ -65,9 +69,10 @@ class NetworkService {
       ..headers.addAll({
         'Authorization': authorizationToken,
       })
-      ..files.add(await http.MultipartFile.fromPath(
+      ..files.add(http.MultipartFile.fromBytes(
         'images[]', // The field name in the form
-        imageFile.path,
+        imageFile,
+        filename: id,
       ));
     try {
       var streamedResponse = await request.send();
@@ -79,7 +84,8 @@ class NetworkService {
     }
   }
 
-  Future<File?> getImageFileFromUrl(String? imageUrl, String imageName) async {
+  Future<Uint8List?> getImageFileFromUrl(
+      String? imageUrl, String imageName) async {
     if (imageUrl == null || imageUrl.isEmpty) {
       return null;
     }
@@ -88,14 +94,7 @@ class NetworkService {
       // Preuzmi sliku s URL-a
       var response = await http.get(Uri.parse(imageUrl));
       if (response.statusCode == 200) {
-        // Dohvati privremeni direktorij
-        var tempDir = await getTemporaryDirectory();
-        String filePath = '${tempDir.path}/$imageName';
-        File file = File(filePath);
-
-        // Spremi preuzete podatke kao datoteku
-        await file.writeAsBytes(response.bodyBytes);
-        return file;
+        return response.bodyBytes;
       } else {
         // Neuspješan odgovor
         print('Failed to download image: ${response.statusCode}');

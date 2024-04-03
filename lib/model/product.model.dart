@@ -99,11 +99,10 @@ class Product {
 
   Map<String, dynamic> toJson() {
     return {
+      'listingId': listingId,
       'imageUrl': imageUrl,
       'name': name,
-      'code': code,
       'catalogNumber': catalogNumber,
-      'description': description,
       'category': category,
       'categoryId': categoryId,
       'price': price,
@@ -132,15 +131,39 @@ class Product {
   // }
 
   Map<String, dynamic> toListing() {
+    // Uključujemo katalog broj u opis, osiguravamo da je uvijek prisutan
+    String fullName = '$name $catalogNumber';
+
+    // Ako je ukupna dužina veća od 55, smanjujemo ime, ali zadržavamo katalog broj
+    if (fullName.length > 55) {
+      int nameLength = 55 - catalogNumber.length - 1; // 1 za razmak
+      name = name.substring(0, nameLength > 0 ? nameLength : 0).trim();
+      fullName = '$name $catalogNumber';
+    }
+
     String description = this.description.isNotEmpty
         ? "${this.description.split(";").map((item) => "<p>$item</p>").join("")}<p><br></p>"
         : "";
 
-    description +=
-        "<p>Robiko d.o.o.</p><p><br></p><p>Autodijelovi<br>Servis<br>Optika trapa</p><p><br></p><p>Sovici bb Grude</p><p><br></p><p>08:00-16:00h</p><p><br></p><p>00387 39 670 959</p>";
+    description += "<p>Naziv: $name</p><p>Kataloški broj: $catalogNumber</p><p></p>";
+
+    description += """
+          <p><strong>Dobrodošli u RobikoShop - Vaš partner za autodijelove, ulja i usluge servisa i optike trapa!</strong></p>
+          <p>Robiko d.o.o. je pouzdana destinacija za sve vaše potrebe u vezi s automobilima. Od osnivanja, posvećeni smo pružanju vrhunskih proizvoda i usluga našim klijentima diljem [lokacija].</p>
+          <p><strong>Naša ponuda:</strong></p>
+          <ul>
+              <li><strong>Autodijelovi:</strong> Ponosno nudimo širok asortiman novih autodijelova za različite marke i modele vozila. Bez obzira jeste li u potrazi za dijelovima za motor, kočnice, ovjes ili nešto drugo, u našoj ponudi ćete pronaći sve što vam je potrebno za održavanje i popravak vašeg vozila.</li>
+              <li><strong>Ulja:</strong> Kvalitetno ulje je ključno za optimalno funkcioniranje vašeg vozila. U našoj trgovini možete pronaći širok izbor ulja različitih viskoznosti i specifikacija, kako biste osigurali dugotrajnost i pouzdanost vašeg motora.</li>
+              <li><strong>Servis:</strong> Naš stručni tim mehaničara posvećen je pružanju vrhunskih usluga održavanja i popravaka vozila. Bez obzira jeste li u potrebi za redovitim servisom, popravkom ili dijagnostikom, možete računati na nas za brzu, pouzdanu i profesionalnu uslugu.</li>
+              <li><strong>Optika trapa:</strong> Precizno podešen ovjes ključan je za udobnost, sigurnost i stabilnost vašeg vozila. Naš tim stručnjaka opremljen je najnovijom opremom i znanjem kako bi osigurao da je vaša optika trapa u savršenom stanju.</li>
+          </ul>
+          <p>Uzimajući u obzir našu stručnost, predanost kvaliteti i izvrsnu uslugu, Robiko d.o.o. je vaša prvotna destinacija za sve vaše potrebe u vezi s automobilima. Kontaktirajte nas danas i dopustite nam da vam pružimo vrhunsku podršku koja vam je potrebna!</p>
+          <p><br></p>
+          <p><strong>Kontakt broj: 00387 63 885 439 / 00387 39 670 959</strong></p>
+          """;
 
     final Map<String, dynamic> listing = {
-      'title': '$name $catalogNumber',
+      'title': fullName,
       'listing_type': 'sell',
       'description': description,
       'price': price,

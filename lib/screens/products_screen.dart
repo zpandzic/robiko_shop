@@ -3,7 +3,9 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:robiko_shop/Widgets/products_list_widget.dart';
 import 'package:robiko_shop/dialogs/upload_progress_dialog.dart';
+import 'package:robiko_shop/exceptions/hourly_limit_exceeded_exception.dart';
 import 'package:robiko_shop/model/product.model.dart';
+import 'package:robiko_shop/network_service.dart';
 import 'package:robiko_shop/product_repository.dart';
 import 'package:robiko_shop/services/dialog_service.dart';
 import 'package:robiko_shop/services/firebase_service.dart';
@@ -80,6 +82,7 @@ class ProductsScreenState extends State<ProductsScreen>
 
     List<Product> successfulUploads = [];
     List<Product> batchSuccessfulUploads = [];
+    int minutesToWait = 15;
 
     int numberOfSuccessfulUploads = 0;
     failedUploads = 0;
@@ -122,18 +125,18 @@ class ProductsScreenState extends State<ProductsScreen>
       limitReached = false;
 
       try {
-        // String listingId = await NetworkService()
-        //     .uploadListing(product.toListing(), product.catalogNumber);
-        //
-        product.listingId = 'listingId'; //vratit
-        if (currentIndex > 0 &&
-            currentIndex % 30 == 0 &&
-            lastIndexSuccessful == true) {
-          //remove
-          throw Exception('Greška');
-        }
-        lastIndexSuccessful = true; //remove
-        await Future.delayed(const Duration(milliseconds: 300)); //remove
+        String listingId = await NetworkService()
+            .uploadListing(product.toListing(), product.catalogNumber);
+
+        product.listingId = listingId;
+        // if (currentIndex > 0 &&
+        //     currentIndex % 30 == 0 &&
+        //     lastIndexSuccessful == true) {
+        //   //remove
+        //   throw Exception('Greška');
+        // }
+        // lastIndexSuccessful = true; //remove
+        // await Future.delayed(const Duration(milliseconds: 300)); //remove
 
         successfulUploads.add(product);
         batchSuccessfulUploads.add(product);
@@ -149,25 +152,26 @@ class ProductsScreenState extends State<ProductsScreen>
         ProductRepository().removeUploadedProducts([product]);
 
         setState(() {
-          // numberOfSuccessfulUploads = successfulUploads.length;
-          numberOfSuccessfulUploads++;
+          numberOfSuccessfulUploads = successfulUploads.length;
+          // numberOfSuccessfulUploads++; //maknit
         });
+      } on HourlyLimitExceededException catch (e) {
+        print('Dosegnut limit objava: ${e.toString()}');
+        limitReached = true;
+        lastIndexSuccessful = false;
+        currentIndex--;
       } catch (e) {
-        print('Greška prilikom objavljivanja proizvoda: $e');
-        if (true) {
-          print('Dosegnut limit');
-          limitReached = true;
-          lastIndexSuccessful = false;
-          currentIndex--;
-        } else {
-          setState(() {
-            failedUploads++;
-          });
-        }
+        print(
+          'Greška prilikom objavljivanja proizvoda: $e, proizvod: ${product.toJson()}',
+        );
+
+        setState(() {
+          failedUploads++;
+        });
       }
 
       if (limitReached == true) {
-        var time = DateTime.now().add(const Duration(minutes: 1));
+        var time = DateTime.now().add(Duration(minutes: minutesToWait));
         nextPublishTime =
             "${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}";
         print('Objavljivanje zaustavljeno do $nextPublishTime');
@@ -195,7 +199,7 @@ class ProductsScreenState extends State<ProductsScreen>
 
         //zelim spremit podatke prije ovog
         print('[[Pauziranje]]');
-        for (int i = 0; i < 1 * 10; i++) {
+        for (int i = 0; i < 1 * 60 * minutesToWait; i++) {
           await Future.delayed(
             const Duration(seconds: 1),
           );

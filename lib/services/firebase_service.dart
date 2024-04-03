@@ -110,9 +110,9 @@ class FirebaseService {
     }
 
     // Izvrši sve ažuriranja u jednom pozivu
-    // if (updates.isNotEmpty) {
-    //   await database.ref().update(updates);
-    // }
+    if (updates.isNotEmpty) {
+      await database.ref().update(updates);
+    }
   }
 
   Future<void> deleteProducts(List<FirebaseItem> products) async {
